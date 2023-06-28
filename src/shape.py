@@ -32,47 +32,50 @@ def gauss_angle_dist(degree, width, power=1):
     return np.exp(-np.power((degree - 0)/width, 2.)/2.)
 
 
-def translate_by_theta_r(shape, theta, r):
+def translate_by_theta_r(shape, theta, r, delta=0):
     """Translate a shape by theta and r
 
     
     shift_x = r * sin(theta)
     shift_y = r * cos(theta)
+    delta: further shift in the angle direction
     """
-    shift_x = np.cos(np.deg2rad(theta)) * r
-    shift_y = np.sin(np.deg2rad(theta)) * r
+    shift_x = np.cos(np.deg2rad(theta)) * (r + delta)
+    shift_y = np.sin(np.deg2rad(theta)) * (r + delta)
     new_shape = translate(shape, xoff=shift_x, yoff=shift_y)
     return new_shape
 
 
-def shape_to_projection(shape, thickness, theta, psi, H):
+def shape_to_projection(shape, thickness, theta, psi, H, **params):
     """Generate the projected shape along incident angle (theta, psi)
     given the film thickness and spacing H
     """
     tan_psi = np.tan(np.deg2rad(psi))
     r = tan_psi * thickness
     R = tan_psi * H
-    shape1 = translate_by_theta_r(shape, theta, r)
+    shape1 = translate_by_theta_r(shape, theta, r, **params)
     allowed = shape.intersection(shape1)
-    projection = translate_by_theta_r(allowed, 180 + theta, (r + R))
+    projection = translate_by_theta_r(allowed, 180 + theta, (r + R), **params)
     return projection
 
 
-def get_union_shape(shape, thickness, psi, H, steps=360):
+def get_union_shape(shape, thickness, psi, H, steps=360, **params):
     """Get an envelop of all theta angles
     """
     envelope = shape_to_projection(shape=shape,
                                    thickness=thickness,
                                    theta=0,
                                    psi=psi,
-                                   H=H)
+                                   H=H,
+                                   **params)
     angles = np.linspace(0, 360, steps)
     for theta in angles:
         new_shape = shape_to_projection(shape=shape,
                                         thickness=thickness,
                                         theta=theta,
                                         psi=psi,
-                                        H=H)
+                                        H=H,
+                                        **params)
         envelope = envelope.union(new_shape)
     return envelope
 
