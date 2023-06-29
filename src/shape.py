@@ -136,7 +136,7 @@ def shift_array(z, xx, yy, xs, ys):
     # Compute shift in terms of grid indices
     dx = int(round(xs / (xx[0, 1] - xx[0, 0])))
     dy = int(round(ys / (yy[1, 0] - yy[0, 0])))
-    print(dx, dy)
+    # print(dx, dy)
 
     # Create a new array filled with zeros
     z_shifted = np.zeros_like(z)
