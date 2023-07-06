@@ -1,0 +1,92 @@
+<!doctype html>
+<html>
+  <head>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.23.3/full/pyodide.js"></script>
+  </head>
+
+  <body>
+    <p id="status">Loading...</p>
+    <button id="run-button" onclick="evaluatePython()" disabled>Run Python</button>
+    <br />
+    <canvas id="canvas"></canvas>
+
+    <style>
+      @keyframes blink {
+        0% {opacity: 1;}
+        50% {opacity: 0.4;}
+        100% {opacity: 1;}
+      }
+
+      .blink {
+        animation: blink 1s linear infinite;
+      }
+    </style>
+
+    <script>
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      const status = document.getElementById('status');
+      const runButton = document.getElementById('run-button');
+      
+      img.onload = function() {
+          ctx.drawImage(img, 0, 0);
+      }
+      status.classList.add('blink');
+
+      // init Pyodide
+      async function main() {
+          let pyodide = await loadPyodide();
+	  status.textContent = "Pyodide is ready, loading packages matplotlib, numpy and shapely...";
+          console.log("Pyodide is ready");
+          await pyodide.loadPackage(['numpy', 'matplotlib', 'shapely']);
+	  status.textContent = "Pyodide modules loaded. Change your settings to run the simulation!";
+	  status.classList.remove('blink');
+          console.log("'numpy' and 'matplotlib' are loaded");
+	  runButton.disabled = false;
+        return pyodide;
+      }
+      let pyodideReadyPromise = main();
+
+      async function evaluatePython() {
+	  // status.textContent = "Running Python code...";
+          // status.classList.add('blink');
+	  // runButton.disabled = true;
+	  // await new Promise(r => setTimeout(r, 0));
+          let pyodide = await pyodideReadyPromise;
+        try {
+          let code = `
+            import matplotlib.pyplot as plt
+            import matplotlib
+            matplotlib.use("module://matplotlib_pyodide.html5_canvas_backend")
+            import numpy as np
+
+            plt.cla()
+            fig, ax = plt.subplots()
+            
+            t = np.random.random(size=(150, 1))
+            s = 1 + np.sin(2 * np.pi * t)
+
+            ax.plot(t, s, "o")
+            ax.set(xlabel='time (s)', ylabel='voltage (mV)', title='About as simple as it gets, folks')
+            ax.grid()
+
+            plt.show()
+          `;
+            pyodide.runPython(code);
+	    // status.textContent = "";
+	    // runButton.disabled = false;
+            // status.classList.remove('blink');
+          // let imageData = await pyodide.globals.get("open")('/tmp/figure.png', 'rb').read();
+          // img.src = 'data:image/png;base64,' + btoa(new TextDecoder("latin1").decode(imageData));
+        } catch (err) {
+	    // status.textContent = err;
+            // status.classList.remove('blink');
+	    // runButton.disabled = false;
+          console.error(err);
+        }
+      }
+      
+    </script>
+  </body>
+</html>

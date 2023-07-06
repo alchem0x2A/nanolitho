@@ -16,6 +16,7 @@ nm = 0.001
 def make_circle(x, y, r):
     return Point(x, y).buffer(r)
 
+
 # def make_line()
 
 
@@ -26,10 +27,11 @@ def cosine_dist(degree, power=1):
     cp = np.power(c, power)
     return cp
 
+
 def gauss_angle_dist(degree, width, power=1):
     """Cosine distribution cos^p (deg)
     """
-    return np.exp(-np.power((degree - 0)/width, 2.)/2.)
+    return np.exp(-np.power((degree - 0) / width, 2.) / 2.)
 
 
 def translate_by_theta_r(shape, theta, r, delta=0):
@@ -118,6 +120,7 @@ def draw_shape(ax, shape, c='black', alpha=0.25):
         ax.add_patch(interior_patch)
     return
 
+
 def shift_array(z, xx, yy, xs, ys):
     """Shifts a 2D array over a grid by a specified x and y offset.
 
@@ -148,12 +151,10 @@ def shift_array(z, xx, yy, xs, ys):
         z_shifted[dy:, :dx] = z[:-dy or None, -dx:]
     elif dx < 0 and dy >= 0:
         z_shifted[:dy, dx:] = z[-dy:, :-dx or None]
-    else: # dx < 0 and dy < 0
+    else:  # dx < 0 and dy < 0
         z_shifted[:dy, :dx] = z[-dy:, -dx:]
 
     return z_shifted
-
-
 
 
 def calc_intensity_matrix(shape, intensity, xmesh, ymesh):
@@ -164,17 +165,17 @@ def calc_intensity_matrix(shape, intensity, xmesh, ymesh):
     # Create a grid of points within the bbox
     bbox = shape.bounds
     mask = np.zeros_like(xmesh, dtype=bool)
-    
+
     # Find the indices of the points within the bbox
-    within_bbox_indices = ((xmesh >= bbox[0]) & (xmesh <= bbox[2]) & (ymesh >= bbox[1]) & (ymesh <= bbox[3]))
+    within_bbox_indices = ((xmesh >= bbox[0]) & (xmesh <= bbox[2]) &
+                           (ymesh >= bbox[1]) & (ymesh <= bbox[3]))
     # Only consider points within the bbox for contains calculation
     x_within_bbox = xmesh[within_bbox_indices]
     y_within_bbox = ymesh[within_bbox_indices]
 
     # Create a binary mask of the shape over the grid
     mask[within_bbox_indices] = contains(shape, x_within_bbox, y_within_bbox)
-    
-    
+
     # Multiply the mask by the intensity to obtain an intensity matrix
     intensity_matrix = mask * intensity
 
