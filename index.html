@@ -10,18 +10,56 @@
     <p id="status">Loading...</p>
     <!-- Add your input boxes here -->
     <br />
-    <div class="controls form-group mb-1">
-    <label for="radius">Radius:</label>
-    <input class="form-control-sm" id="radius" type="text" value="1" />
-    <label for="thickness">Thickness:</label>
-    <input class="form-control-sm" id="thickness" type="text" value="1" />
-    <label for="angle">Angle:</label>
-    <input class="form-control-sm" id="angle" type="text" value="1" />
-    <label for="shift">Shift:</label>
-    <input class="form-control-sm" id="shift" type="text" value="1" />
-    <button id="run-button" onclick="evaluatePython()" disabled class="btn btn-primary mt-3">Run Python</button>
-    <br />
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-md-6">
+                <h2>Stencil Design</h2>
+                <div class="form-group">
+                    <!-- Here you can add your input fields for the stencil design -->
+                    <button id="visualize-button" class="btn btn-primary mt-2">Visualize Stencil</button>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <h2>Experiment Parameter</h2>
+                <div class="form-group">
+                    <label for="radius">Radius:</label>
+                    <input type="text" id="radius" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label for="thickness">Thickness:</label>
+                    <input type="text" id="thickness" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label for="angle">Angle:</label>
+                    <input type="text" id="angle" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label for="shift">Shift:</label>
+                    <input type="text" id="shift" class="form-control">
+                </div>
+                <button id="run-button"
+			onclick="evaluatePython()"
+			disabled
+			class="btn btn-primary mt-3">Run Simulation</button>
+            </div>
+        </div>
     </div>
+    <!-- The rest of your code... -->
+
+    
+    <!-- <div class="controls form-group mb-1"> -->
+    <!-- <label for="radius">Radius:</label> -->
+    <!-- <input class="form-control-sm" id="radius" type="text" value="1" /> -->
+    <!-- <label for="thickness">Thickness:</label> -->
+    <!-- <input class="form-control-sm" id="thickness" type="text" value="1" /> -->
+    <!-- <label for="angle">Angle:</label> -->
+    <!-- <input class="form-control-sm" id="angle" type="text" value="1" /> -->
+    <!-- <label for="shift">Shift:</label> -->
+    <!-- <input class="form-control-sm" id="shift" type="text" value="1" /> -->
+    <!-- <button id="run-button" onclick="evaluatePython()" disabled class="btn btn-primary mt-3">Run Python</button> -->
+    <!-- <br /> -->
+    <!-- </div> -->
 
     <div class="row">
       <div class="col-lg-6">
