@@ -3,6 +3,7 @@
   <head>
     <script src="https://cdn.jsdelivr.net/pyodide/v0.23.3/full/pyodide.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css">
+    <!-- <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" crossorigin="anonymous"></script> -->
   </head>
 
   <body class="container">
@@ -11,16 +12,20 @@
     <!-- Add your input boxes here -->
     <br />
 
-    <div class="container mt-4">
+    <div class="container sm-4">
         <div class="row">
-            <div class="col-md-6">
+            <div class="col-sm-6">
                 <h2>Stencil Design</h2>
                 <div class="form-group">
-                    <!-- Here you can add your input fields for the stencil design -->
-                    <button id="visualize-button" class="btn btn-primary mt-2">Visualize Stencil</button>
+                  <!-- Here you can add your input fields for the stencil design -->
+		  <div id="stencil-form">
+                    <!-- The input fields for the stencil design will be added here -->
+                  </div>
+                    <button id="add-stencil" class="btn btn-secondary sm-2">Add Stencil</button>
+                    <button id="visualize-button" class="btn btn-primary sm-2">Visualize Stencil</button>
                 </div>
             </div>
-            <div class="col-md-6">
+            <div class="col-sm-6">
                 <h2>Experiment Parameter</h2>
                 <div class="form-group">
                     <label for="radius">Radius:</label>
@@ -163,7 +168,27 @@
           console.error(err);
         }
       }
-      
-    </script>
+
+      // add form control
+      $("#add-stencil").click(function() {
+            $("#stencil-form").append(`
+                <div class="form-row mt-2">
+                    <div class="form-group col-md-4">
+                        <select class="form-control">
+                            <option>Circle</option>
+                            <option>Rectangle</option>
+                        </select>
+                    </div>
+                    <div class="form-group col-md-4">
+                        <input type="text" class="form-control" placeholder="center_x">
+                    </div>
+                    <div class="form-group col-md-4">
+                        <input type="text" class="form-control" placeholder="center_y">
+                    </div>
+                </div>
+            `);
+        });
+	</script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" crossorigin="anonymous"></script>
   </body>
 </html>
