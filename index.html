@@ -9,6 +9,7 @@
     <button id="run-button" onclick="evaluatePython()" disabled>Run Python</button>
     <br />
     <canvas id="canvas"></canvas>
+    <div id="mplContainer"></div>
 
     <style>
       @keyframes blink {
@@ -28,6 +29,7 @@
       const img = new Image();
       const status = document.getElementById('status');
       const runButton = document.getElementById('run-button');
+      const mplContainer = document.getElementById("mplContainer");
       
       img.onload = function() {
           ctx.drawImage(img, 0, 0);
@@ -58,10 +60,13 @@
           let code = `
             import matplotlib.pyplot as plt
             import matplotlib
-            matplotlib.use("module://matplotlib_pyodide.html5_canvas_backend")
+            import io
+            import base64
+            #matplotlib.use("module://matplotlib_pyodide.html5_canvas_backend")
             import numpy as np
 
             plt.cla()
+            plt.close('all')
             fig, ax = plt.subplots()
             
             t = np.random.random(size=(150, 1))
@@ -71,9 +76,13 @@
             ax.set(xlabel='time (s)', ylabel='voltage (mV)', title='About as simple as it gets, folks')
             ax.grid()
 
-            plt.show()
+            svg_io = io.BytesIO()
+            plt.savefig(svg_io, format='svg')
+            svg_str = base64.b64encode(svg_io.getvalue()).decode('utf-8')
           `;
             pyodide.runPython(code);
+	    let svg_str = pyodide.globals.get("svg_str");
+	    mplContainer.innerHTML = '<img src="data:image/svg+xml;base64,' + svg_str + '">';
 	    // status.textContent = "";
 	    // runButton.disabled = false;
             // status.classList.remove('blink');
