@@ -4,8 +4,6 @@ from shapely.geometry import Polygon, box, Point
 from shapely.affinity import rotate, translate
 from matplotlib import patches
 from shapely.vectorized import contains
-import numba
-from shapely import simplify
 
 # All dimensions are in um
 mm = 1000
