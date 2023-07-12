@@ -108,54 +108,90 @@
       // }
       status.classList.add('blink');
 
+//       async function load_python_script() {
+//       async function fetch_python_script(url) {
+// 	  let response = await fetch(url);
+// 	  let text = await response.text();
+// 	  return text;
+//       }
+
+// 	  let my_python_script = await fetch_python_script("src/s");
+// 	  let pyodide = await loadPyodide();
+// 	  await pyodide.runPythonAsync(`import sys
+// import types
+// shape = types.ModuleType("shape")
+// sys.modules["shape"] = shape
+// exec(${my_python_script}, shape.__dict__)`);
+//       }
+
+      // let loadShape = load_python_script();
+
       // init Pyodide
       async function main() {
           let pyodide = await loadPyodide();
 	  status.textContent = "Pyodide is ready, loading packages matplotlib, numpy and shapely...";
           console.log("Pyodide is ready");
-          await pyodide.loadPackage(['numpy', 'matplotlib', 'shapely']);
+          await pyodide.loadPackage(['numpy', 'matplotlib', 'shapely', 'micropip', 'scipy']);
 	  status.textContent = "Pyodide modules loaded. Change your settings to run the simulation!";
 	  status.classList.remove('blink');
           console.log("'numpy' and 'matplotlib' are loaded");
+	  let code_first = `
+import micropip
+await micropip.install('pyodide_importer')
+from pyodide_importer import register_hook
+url = './'
+register_hook(url)
+from mbhl.simulation import Circle, Rectangle, Square
+from mbhl.simulation import Mask, Physics, System
+from mbhl.simulation import nm, um
+`
+	  await pyodide.runPythonAsync(code_first);
+	  console.log("personal modules loaded!");
 	  runButton.disabled = false;
         return pyodide;
       }
       let pyodideReadyPromise = main();
+      // let loadShape = load_python_script();
 
       async function evaluatePython() {
 	  // status.textContent = "Running Python code...";
           // status.classList.add('blink');
 	  // runButton.disabled = true;
 	  // await new Promise(r => setTimeout(r, 0));
+	  
           let pyodide = await pyodideReadyPromise;
-        try {
-          let code = `
-            import matplotlib.pyplot as plt
-            import matplotlib
-            import io
-            import base64
-            #matplotlib.use("module://matplotlib_pyodide.html5_canvas_backend")
-            import numpy as np
-
-            plt.cla()
-            plt.close('all')
-            fig, ax = plt.subplots()
-            
-            t = np.random.random(size=(150, 1))
-            s = 1 + np.sin(2 * np.pi * t)
-
-            ax.plot(t, s, "o")
-            ax.set(xlabel='time (s)', ylabel='voltage (mV)', title='About as simple as it gets, folks')
-            ax.grid()
-
-            svg_io = io.BytesIO()
-            plt.savefig(svg_io, format='svg')
-            svg_str = base64.b64encode(svg_io.getvalue()).decode('utf-8')
-          `;
-            pyodide.runPython(code);
-	    let svg_str = pyodide.globals.get("svg_str");
-	    mplContainer1.innerHTML = '<img src="data:image/svg+xml;base64,' + svg_str + '">';
-	    mplContainer2.innerHTML = '<img src="data:image/svg+xml;base64,' + svg_str + '">';
+	  // let mod = await loadShape;
+	  // await loadShape;
+          try {
+	      
+      let code = `
+      import matplotlib.pyplot as plt
+      import matplotlib
+      import io
+      import base64
+      import numpy as np
+      
+      from mbhl.simulation import Circle, Rectangle, Square
+      from mbhl.simulation import Mask, Physics, System
+      from shapely.affinity import rotate, translate
+      from mbhl.simulation import nm, um
+      plt.figure()
+      patches = [Circle(0, 0, 0.05)]
+      mask = Mask(patches=patches, unit_cell=[0.5, 0.5], repeat=[5, 5], thickness=0.1 * um)
+      physics = Physics(psi=5.0, psi_broadening=0.05, drift=0 * nm, diffusion=2 * nm)
+      system = System(mask=mask, physics=physics)
+      array = system.simulate(h=10 * nm)
+      plt.imshow(array)
+      svg_io = io.BytesIO()
+      plt.savefig(svg_io, format='svg')
+      svg_str = base64.b64encode(svg_io.getvalue()).decode('utf-8')
+      svg_str
+      `;
+      
+      pyodide.runPython(code);
+      let svg_str = pyodide.globals.get("svg_str");
+      mplContainer1.innerHTML = '<img src="data:image/svg+xml;base64,' + svg_str + '">';
+      mplContainer2.innerHTML = '<img src="data:image/svg+xml;base64,' + svg_str + '">';
 	    // status.textContent = "";
 	    // runButton.disabled = false;
             // status.classList.remove('blink');
@@ -170,24 +206,24 @@
       }
 
       // add form control
-      $("#add-stencil").click(function() {
-            $("#stencil-form").append(`
-                <div class="form-row mt-2">
-                    <div class="form-group col-md-4">
-                        <select class="form-control">
-                            <option>Circle</option>
-                            <option>Rectangle</option>
-                        </select>
-                    </div>
-                    <div class="form-group col-md-4">
-                        <input type="text" class="form-control" placeholder="center_x">
-                    </div>
-                    <div class="form-group col-md-4">
-                        <input type="text" class="form-control" placeholder="center_y">
-                    </div>
-                </div>
-            `);
-        });
+      // $("#add-stencil").click(function() {
+      //       $("#stencil-form").append(`
+      //           <div class="form-row mt-2">
+      //               <div class="form-group col-md-4">
+      //                   <select class="form-control">
+      //                       <option>Circle</option>
+      //                       <option>Rectangle</option>
+      //                   </select>
+      //               </div>
+      //               <div class="form-group col-md-4">
+      //                   <input type="text" class="form-control" placeholder="center_x">
+      //               </div>
+      //               <div class="form-group col-md-4">
+      //                   <input type="text" class="form-control" placeholder="center_y">
+      //               </div>
+      //           </div>
+      //       `);
+      //   });
 	</script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" crossorigin="anonymous"></script>
   </body>
