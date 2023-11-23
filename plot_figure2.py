@@ -153,7 +153,7 @@ def plot_hex_heatmap(ax, R=8.0, L_list=[8 / 1.732, 6, 8, 10], cmap="viridis", sa
 
 def plot_colorbar(cax, cmap="viridis"):
     fig, ax = plt.subplots(1, 1)
-    im = ax.imshow([[0, 1], [1, 0]])
+    im = ax.imshow([[0, 1], [1, 0]], cmap=cmap)
     fig.colorbar(im, cax=cax)
 
 
