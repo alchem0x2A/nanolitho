@@ -19,23 +19,21 @@ def make_circle(x, y, r):
 
 
 def cosine_dist(degree, power=1):
-    """Cosine distribution cos^p (deg)
-    """
+    """Cosine distribution cos^p (deg)"""
     c = np.cos(np.deg2rad(degree))
     cp = np.power(c, power)
     return cp
 
 
 def gauss_angle_dist(degree, width, power=1):
-    """Cosine distribution cos^p (deg)
-    """
-    return np.exp(-np.power((degree - 0) / width, 2.) / 2.)
+    """Cosine distribution cos^p (deg)"""
+    return np.exp(-np.power((degree - 0) / width, 2.0) / 2.0)
 
 
 def translate_by_theta_r(shape, theta, r, delta=0):
     """Translate a shape by theta and r
 
-    
+
     shift_x = r * sin(theta)
     shift_y = r * cos(theta)
     delta: further shift in the angle direction
@@ -60,22 +58,15 @@ def shape_to_projection(shape, thickness, theta, psi, H, **params):
 
 
 def get_union_shape(shape, thickness, psi, H, steps=360, **params):
-    """Get an envelop of all theta angles
-    """
-    envelope = shape_to_projection(shape=shape,
-                                   thickness=thickness,
-                                   theta=0,
-                                   psi=psi,
-                                   H=H,
-                                   **params)
+    """Get an envelop of all theta angles"""
+    envelope = shape_to_projection(
+        shape=shape, thickness=thickness, theta=0, psi=psi, H=H, **params
+    )
     angles = np.linspace(0, 360, steps)
     for theta in angles:
-        new_shape = shape_to_projection(shape=shape,
-                                        thickness=thickness,
-                                        theta=theta,
-                                        psi=psi,
-                                        H=H,
-                                        **params)
+        new_shape = shape_to_projection(
+            shape=shape, thickness=thickness, theta=theta, psi=psi, H=H, **params
+        )
         envelope = envelope.union(new_shape)
     return envelope
 
@@ -83,7 +74,7 @@ def get_union_shape(shape, thickness, psi, H, steps=360, **params):
 def bbox_to_mesh(shape, size=1024):
     """Rasterize a shape to a NumPy array
     shape could be conveniently a bbox
-    
+
     """
     # Get the bounding box of the shape
     minx, miny, maxx, maxy = shape.bounds
@@ -99,22 +90,23 @@ def bbox_to_mesh(shape, size=1024):
     return points
 
 
-def draw_shape(ax, shape, c='black', alpha=0.25):
+def draw_shape(ax, shape, c="black", alpha=0.25):
     """Draw a shape on a given axis"""
     # Create a Polygon patch for the exterior
-    exterior_patch = patches.Polygon(np.column_stack(shape.exterior.xy),
-                                     fill=True,
-                                     color=c,
-                                     edgecolor="none",
-                                     alpha=alpha)
+    exterior_patch = patches.Polygon(
+        np.column_stack(shape.exterior.xy),
+        fill=True,
+        color=c,
+        edgecolor="none",
+        alpha=alpha,
+    )
     ax.add_patch(exterior_patch)
 
     # Create Polygon patches for the interiors
     for interior in shape.interiors:
-        interior_patch = patches.Polygon(np.column_stack(interior.xy),
-                                         fill=True,
-                                         edgecolor="none",
-                                         color='white')
+        interior_patch = patches.Polygon(
+            np.column_stack(interior.xy), fill=True, edgecolor="none", color="white"
+        )
         ax.add_patch(interior_patch)
     return
 
@@ -144,11 +136,11 @@ def shift_array(z, xx, yy, xs, ys):
 
     # Shift the array
     if dx >= 0 and dy >= 0:
-        z_shifted[dy:, dx:] = z[:-dy or None, :-dx or None]
+        z_shifted[dy:, dx:] = z[: -dy or None, : -dx or None]
     elif dx >= 0 and dy < 0:
-        z_shifted[dy:, :dx] = z[:-dy or None, -dx:]
+        z_shifted[dy:, :dx] = z[: -dy or None, -dx:]
     elif dx < 0 and dy >= 0:
-        z_shifted[:dy, dx:] = z[-dy:, :-dx or None]
+        z_shifted[:dy, dx:] = z[-dy:, : -dx or None]
     else:  # dx < 0 and dy < 0
         z_shifted[:dy, :dx] = z[-dy:, -dx:]
 
@@ -165,8 +157,12 @@ def calc_intensity_matrix(shape, intensity, xmesh, ymesh):
     mask = np.zeros_like(xmesh, dtype=bool)
 
     # Find the indices of the points within the bbox
-    within_bbox_indices = ((xmesh >= bbox[0]) & (xmesh <= bbox[2]) &
-                           (ymesh >= bbox[1]) & (ymesh <= bbox[3]))
+    within_bbox_indices = (
+        (xmesh >= bbox[0])
+        & (xmesh <= bbox[2])
+        & (ymesh >= bbox[1])
+        & (ymesh <= bbox[3])
+    )
     # Only consider points within the bbox for contains calculation
     x_within_bbox = xmesh[within_bbox_indices]
     y_within_bbox = ymesh[within_bbox_indices]
