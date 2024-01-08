@@ -12,28 +12,27 @@ template = figure_dir / "figure2-template.svg"
 diffusion = 15 * nm
 
 
-def plot_square_P_map(ax, psi=5.0, R=6.0, spacing_ratio=5, cmap="magma"):
+def plot_square_P_map(ax, psi=5.0, Rr_ratio=6.0, Lr_ratio=5, cmap="magma"):
     psi = np.deg2rad(psi)
     radius = 50 * nm
-    Ratio = R
-    H = radius * Ratio / np.tan(psi)
+    # Ratio = R
+    H = radius * Rr_ratio / np.tan(psi)
 
     trajectory = np.array(
         [(psi, theta) for theta in np.deg2rad(np.linspace(0, 360, 720))]
     )
     phys = Physics(trajectory, diffusion=diffusion, drift=0 * nm)
-    spacing = spacing_ratio
-    W = spacing * radius
+    W = Lr_ratio * radius
     mask = Mask(
         [Circle(0, 0, radius)],
         unit_cell=(W, W),
         repeat=(20, 20),
         pad=50 * nm,
-        thickness=100 * nm,
+        thickness=0 * nm,
         spacing=H,
     )
     system = System(mask=mask, physics=phys)
-    conv = system.simulate(h=5 * nm)
+    conv = system.simulate(h=(W / 100 / nm) * nm)
     ax.set_axis_off()
     system.draw(
         ax,
@@ -45,32 +44,31 @@ def plot_square_P_map(ax, psi=5.0, R=6.0, spacing_ratio=5, cmap="magma"):
         xlim=(10, 50),
         ylim=(10, 50),
     )
-    ax.set_title(f"$R/L$={6 / spacing:.1f}")
+    ax.set_title(f"$R/L$={Rr_ratio / Lr_ratio:.1f}")
     return
 
 
-def plot_hex_P_map(ax, psi=5.0, R=8.0, spacing_ratio=5, cmap="magma"):
+def plot_hex_P_map(ax, psi=5.0, Rr_ratio=8.0, Lr_ratio=5, cmap="magma"):
     psi = np.deg2rad(psi)
     radius = 50 * nm
-    Ratio = R
-    H = radius * Ratio / np.tan(psi)
+    H = radius * Rr_ratio / np.tan(psi)
 
     trajectory = np.array(
         [(psi, theta) for theta in np.deg2rad(np.linspace(0, 360, 720))]
     )
     phys = Physics(trajectory, diffusion=diffusion, drift=0 * nm)
-    spacing = spacing_ratio
+    spacing = Lr_ratio
     W = spacing * radius
     mask = Mask(
         [Circle(0, 0, radius), Circle(W / 2, W / 2 * np.sqrt(3), radius)],
         unit_cell=(W, W * 3**0.5),
         repeat=(20, 15),
         pad=50 * nm,
-        thickness=100 * nm,
+        thickness=0 * nm,
         spacing=H,
     )
     system = System(mask=mask, physics=phys)
-    conv = system.simulate(h=5 * nm)
+    conv = system.simulate(h=(W / 100 / nm) * nm)
     ax.set_axis_off()
     system.draw(
         ax,
@@ -81,7 +79,7 @@ def plot_hex_P_map(ax, psi=5.0, R=8.0, spacing_ratio=5, cmap="magma"):
         xlim=(10, 50),
         ylim=(10, 50),
     )
-    ax.set_title(f"$R/L$={Ratio / spacing:.1f}")
+    ax.set_title(f"$R/L$={Rr_ratio / Lr_ratio:.1f}")
     return
 
 
@@ -119,6 +117,7 @@ def calc_P(R, lamb, system="square", positive=True):
 def plot_square_heatmap(
     ax, R=8.0, L_list=[8 / 1.414, 6.5, 8, 10], cmap="viridis", samples=256
 ):
+    L_list = np.array(L_list)
     lamb_array = np.linspace(0.1, 15, samples) + 2
     R_array = np.linspace(1.5, 15, samples)
     sump = []
@@ -146,13 +145,22 @@ def plot_square_heatmap(
         ax.plot(lamb_array, RRR, "--", color="white")
     ax.axhline(y=R, ls="--", color="white")
     ax.plot(
-        L_list,
+        L_list[[0, 2]],
         [
             R,
         ]
-        * 4,
+        * 2,
         "o",
-        color="white",
+        color="tab:pink",
+    )
+    ax.plot(
+        L_list[[1, 3]],
+        [
+            R,
+        ]
+        * 2,
+        "o",
+        color="tab:cyan",
     )
     ax.set_xlim(np.min(lamb_array), 12)
     ax.set_ylim(np.min(R_array), np.max(R_array))
@@ -164,6 +172,7 @@ def plot_square_heatmap(
 def plot_hex_heatmap(
     ax, R=8.0, L_list=[8 / 1.732, 6, 8, 10], cmap="viridis", samples=256
 ):
+    L_list = np.array(L_list)
     lamb_array = np.linspace(0.1, 15, samples) + 2
     R_array = np.linspace(1.5, 15, samples)
     sump = []
@@ -193,13 +202,22 @@ def plot_hex_heatmap(
         ax.plot(lamb_array, RRR, "--", color="white")
     ax.axhline(y=R, ls="--", color="white")
     ax.plot(
-        L_list,
+        L_list[[0, 2]],
         [
             R,
         ]
-        * 4,
+        * 2,
         "o",
-        color="white",
+        color="tab:pink",
+    )
+    ax.plot(
+        L_list[[1, 3]],
+        [
+            R,
+        ]
+        * 2,
+        "o",
+        color="tab:cyan",
     )
     ax.set_xlim(np.min(lamb_array), 12)
     ax.set_ylim(np.min(R_array), np.max(R_array))
@@ -239,12 +257,12 @@ def plot_main():
     for i, ratio in enumerate([8 / 1.414, 6.5, 8, 10]):
         print(f"Drawing square heatmap ax {i+1}")
         ax = layout.axes[f"square-{i+1:d}"]["axis"]
-        plot_square_P_map(ax, R=8.0, spacing_ratio=ratio)
+        plot_square_P_map(ax, Rr_ratio=8.0, Lr_ratio=ratio)
 
     for i, ratio in enumerate([8 / 1.732, 6, 8, 10]):
         print(f"Drawing hex heatmap ax {i+1}")
         ax = layout.axes[f"hex-{i+1:d}"]["axis"]
-        plot_hex_P_map(ax, R=8.0, spacing_ratio=ratio)
+        plot_hex_P_map(ax, Rr_ratio=8.0, Lr_ratio=ratio)
 
     print("Drawing color bar2")
     ax = layout.axes[f"heatmap-colorbar2"]["axis"]
