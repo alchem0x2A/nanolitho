@@ -115,7 +115,7 @@ def plot_main():
     print("Fitting SiO2")
     print("#" * 60)
 
-    drift = 76 * nm
+    drift = 80 * nm
     print("Drawing square sio2")
     ax = layout.axes["sio2-rect"]["axis"]
     x_ = 0.47 * um
@@ -125,6 +125,7 @@ def plot_main():
         ax, drift=drift, lim=(x_, x_ + L, y_, y_ + L), alpha=default_alpha
     )
 
+    drift = 63 * nm
     print("Drawing hex sio2")
     ax = layout.axes["sio2-hex"]["axis"]
     x_ = 0.72 * um
@@ -135,7 +136,7 @@ def plot_main():
     print("Fitting Ge")
     print("#" * 60)
 
-    drift = 147 * nm
+    drift = 140 * nm
     print("Drawing square Ge")
     ax = layout.axes["ge-rect"]["axis"]
     x_ = 0.50 * um
@@ -145,6 +146,7 @@ def plot_main():
         ax, drift=drift, lim=(x_, x_ + L, y_, y_ + L), alpha=default_alpha
     )
 
+    drift = 168 * nm
     print("Drawing hex ge")
     ax = layout.axes["ge-hex"]["axis"]
     x_ = 0.75 * um
@@ -152,6 +154,8 @@ def plot_main():
     L = 3.0 * um
     plot_hex_P_map(ax, drift=drift, lim=(x_, x_ + L, y_, y_ + L), alpha=default_alpha)
 
+
+    drift = 140 * nm
     print("Drawing rect 0")
     ax = layout.axes["ge-simu-0"]["axis"]
     x_ = 0.89 * um
