@@ -37,8 +37,9 @@ def plot_square_P_map(ax, psi=5.0, R=6.0, spacing_ratio=5, cmap="magma"):
     ax.set_axis_off()
     system.draw(
         ax,
-        mask_alpha=0.8,
+        mask_alpha=1.0,
         show_mask=True,
+        mask_lw=2,
         dimension_ratio=radius,
         cmap=cmap,
         xlim=(10, 50),
@@ -203,13 +204,14 @@ def plot_hex_heatmap(
     ax.set_xlim(np.min(lamb_array), 12)
     ax.set_ylim(np.min(R_array), np.max(R_array))
     ax.set_yticks([])
-    ax.set_xlabel("L/r")
+    ax.set_xlabel("$L/r$")
     ax.set_title("Hexagonal Mask")
-    # ax.text(10, 10, "$R/r=\\sqrt{7}$", color="white")
-    # ax.text(10, 10, "$R/r=\\sqrt{3}$", color="white")
-    # ax.text(10, 10, "$R/r=\\sqrt{5}$", color="white")
-    # ax.text(10, 10, "$R/r=2$")
-    # ax.text(10, 10, "$R/r=1$")
+    # ax.text(10, 10, "$R/L=\\sqrt{7}$", color="white")
+    # ax.text(10, 10, "$R/L=\\sqrt{3}$", color="white")
+    # ax.text(10, 10, "$R/L=\\sqrt{5}$", color="white")
+    # ax.text(10, 10, "$R/L=\\sqrt{2}$", color="white")
+    # ax.text(10, 10, "$R/L=2$", color="white")
+    # ax.text(10, 10, "$R/L=1$", color="white")
 
 
 def plot_colorbar(cax, cmap="viridis"):
