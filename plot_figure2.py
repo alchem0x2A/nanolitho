@@ -166,7 +166,7 @@ def plot_square_heatmap(
     ax.set_ylim(np.min(R_array), np.max(R_array))
     ax.set_ylabel("$R/r$")
     ax.set_xlabel("$L/r$")
-    ax.set_title("Square Mask")
+    ax.set_title("Square-Lattice Mask")
 
 
 def plot_hex_heatmap(
@@ -223,7 +223,7 @@ def plot_hex_heatmap(
     ax.set_ylim(np.min(R_array), np.max(R_array))
     ax.set_yticks([])
     ax.set_xlabel("$L/r$")
-    ax.set_title("Hexagonal Mask")
+    ax.set_title("Hexagonal-Lattice Mask")
     # ax.text(10, 10, "$R/L=\\sqrt{7}$", color="white")
     # ax.text(10, 10, "$R/L=\\sqrt{3}$", color="white")
     # ax.text(10, 10, "$R/L=\\sqrt{5}$", color="white")
