@@ -163,3 +163,5 @@ cython_debug/
 /*.pdf
 /presentation*/*
 .DS_Store
+archive/*
+manuscript/*
