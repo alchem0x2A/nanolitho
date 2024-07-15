@@ -1,5 +1,6 @@
 import numpy as np
 import math
+from pathlib import Path
 import matplotlib.pyplot as plt
 from scipy.signal import fftconvolve
 from scipy.stats import gaussian_kde
@@ -8,6 +9,7 @@ from shapely.geometry import Polygon, box, Point
 from shapely.affinity import rotate, translate
 from shapely.vectorized import contains
 from shapely.ops import unary_union
+from PIL import Image
 
 # All dimensions are in um
 mm = 1000
@@ -93,7 +95,7 @@ class Mask:
         bin_mask = contains(union, xmesh, ymesh)
         return bin_mask, x_range, y_range
 
-    def draw(self, ax, h=10 * nm, cmap="gray"):
+    def draw(self, ax, h=10 * nm, cmap="gray", vmax=None):
         """Draw the mask pattern,
         ax is an existing matplotlib axis
         """
@@ -106,6 +108,7 @@ class Mask:
                 y_range[0] / um,
                 y_range[-1] / um,
             ),
+            vmax=vmax,
             cmap=cmap,
         )
         ax.set_xlabel("X (μm)")
@@ -202,6 +205,17 @@ class System:
         self.results = (result, x_range, y_range)
         return self.results
 
+    def save_tiff(self, h, fname):
+        """Save the normalized height as a tiff file so that the file can be opened by
+        softwares like gwyddion
+        """
+        if self.results is None:
+            raise RuntimeError("Please finish simulation first!")
+        prob, x_range, y_rang = self.results
+        z_image = Image.fromarray(prob)
+        z_image_file = Path(fname)
+        z_image.save(z_image_file)
+        
     def draw(
         self,
         ax,
@@ -213,6 +227,7 @@ class System:
         xlim=None,
         ylim=None,
         alpha=1.0,
+        vmax=None,
     ):
         """Draw the system simulation results as 2D map"""
         if self.results is None:
@@ -233,7 +248,7 @@ class System:
                 y_range[0] / dimension_ratio,
                 y_range[-1] / dimension_ratio,
             )
-        ax.imshow(prob, extent=extent, cmap=cmap, alpha=alpha)
+        ax.imshow(prob, extent=extent, cmap=cmap, alpha=alpha, vmax=vmax)
 
         if show_mask:
             mask_bin, x_mask, y_mask = self.mask.generate_mesh(h=self.h / 2)
