@@ -4,7 +4,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from scipy.signal import fftconvolve
 from scipy.stats import gaussian_kde
-from scipy.ndimage import gaussian_filter, sobel, binary_dilation
+from scipy.ndimage import gaussian_filter, sobel, binary_dilation, label
 from shapely.geometry import Polygon, box, Point
 from shapely.affinity import rotate, translate
 from shapely.vectorized import contains
@@ -30,8 +30,9 @@ def Square(x, y, w):
     return Rectangle(x, y, w, w)
 
 
-class Mask:
-    """Create an object for the shadow mask from a list of shape objects
+
+class Stencil:
+    """Create an object for the stencil from a list of shape objects
 
     Example:
 
@@ -54,28 +55,76 @@ class Mask:
         self.unit_cell = unit_cell
         self.repeat = repeat
         self.delta = thickness
+        # TODO: obsolete H. Should use D
         self.H = spacing
+        self.D = spacing
         self.pad = pad
+        # Domain is the min_x, max_x, min_y, max_y
         self.domain = None
 
     def __add__(self, mask):
         if not isinstance(mask, Mask):
             raise TypeError("Only accepts Mask instance")
 
-    def create_tiles(self, shrink=0):
-        """Create tiles of the patches with some shrink (forbidden area)"""
+    def _create_repeat_tiles(self, repeat_x=1, repeat_y=1, shrink=0):
+        """Create tiles with both x and y repeat
+        """
+        # TODO: implement method to wrap back to cell
         all_patches = []
         cw, ch = self.unit_cell
-        for i in range(self.repeat[0]):
-            for j in range(self.repeat[1]):
+        for i in range(repeat_x):
+            for j in range(repeat_y):
                 for patch in self.patches:
                     new_patch = patch.buffer(shrink)
                     all_patches.append(translate(new_patch, xoff=cw * i, yoff=ch * j))
         total_union = unary_union(all_patches)
         return total_union
 
+    # TODO: obsolete
+    def create_tiles(self, shrink=0):
+        """Legacy method to create tiles of
+        the patches with some shrink (forbidden area)
+
+        Note this method is grossly inefficient.
+        If edge effect can be ignore, use _create_repeat_tiles instead
+        """
+        total_union = self._create_repeat_tiles(repeat_x=self.repeat[0],
+                                                repeat_y=self.repeat[1],
+                                                shrink=shrink)
+        return total_union
+    
+    def _generate_mesh_unit_cell(self, h=10 * nm, shrink=0):
+        """Generate a per-unit-cell mesh grid with spacing h
+        Should consider periodic images 
+        """
+        # TODO: make sure the tiles are always wraped to first unit
+        # cell
+        # TODO: make sure 9 unit cells are necessary
+        cw, ch = self.unit_cell
+        union_3x3 = self._create_repeat_tiles(repeat_x=3,
+                                              repeat_y=3,
+                                              shrink=shrink)
+        # Make sure the matrix is exactly 3M x 3N
+        # this will create a small difference between h in both directions
+        N, M = int(cw // h), int(ch // h)
+        hx, hy = cw / N, ch / M
+        x_range = np.linspace(0, 3 * cw, 3 * N)
+        y_range = np.linspace(0, 3 * ch, 3 * M)
+        xmesh, ymesh = np.meshgrid(x_range, y_range)
+        print(N, M)
+        print(xmesh.shape, ymesh.shape)
+        bin_mask = contains(union_3x3, xmesh, ymesh)
+        # Pick the values from the center cell
+        # the binary mask has shape M x N
+        uc_mask = bin_mask[M: 2 * M, N: 2 * N]
+        uc_x_range = np.linspace(0, cw, N)
+        uc_y_range = np.linspace(0, ch, M)
+        return uc_mask, uc_x_range, uc_y_range
+
+    # TODO: obsolete
     def generate_mesh(self, h=10 * nm, domain=None, shrink=0):
-        """Create a numpy array as the mesh for the simulation domain"""
+        """Legacy method to create a numpy array considering all repeats
+        as the mesh for the simulation domain"""
         union = self.create_tiles(shrink=shrink)
         if domain is None:
             domain = union.bounds
@@ -96,7 +145,7 @@ class Mask:
         return bin_mask, x_range, y_range
 
     def draw(self, ax, h=10 * nm, cmap="gray", vmax=None):
-        """Draw the mask pattern,
+        """Draw the mask pattern with existing repeats
         ax is an existing matplotlib axis
         """
         bin_mask, x_range, y_range = self.generate_mesh(h)
@@ -115,6 +164,9 @@ class Mask:
         ax.set_ylabel("Y (μm)")
         return
 
+# TODO: obsolete class
+class Mask(Stencil):
+    pass
 
 class Physics:
     """A general class for the physics (filter) behind the MBHL
@@ -124,18 +176,26 @@ class Physics:
     """
 
     def __init__(self, trajectory, psi_broadening=0.05, drift=0 * nm, diffusion=5 * nm):
-        # self.psi = psi
         self.trajectory = np.atleast_2d(trajectory)
         self.xi = psi_broadening
         self.drift = drift
         self.diffusion = diffusion
 
-    def generate_filter(self, h, H, delta=0 * nm, samples=10000, domain_ratio=1.5):
-        # Implementation of the MR matrix generation using psi, broadening, drift, and diffusion
+    # TODO: obsolete method
+    def generate_filter(self, h, H,
+                        delta=0 * nm,
+                        samples=10000,
+                        domain_ratio=1.5):
+        return self.generate_F(h, H, delta, samples, domain_ratio)
+    
+    def generate_F(self, h, D, delta=0 * nm, samples=10000, domain_ratio=1.5):
+        """Generate the offset trajectory F on 2D mesh
+        h: mesh spacing
+        """
 
         # Create the "central" trajectory points
         psi, theta = self.trajectory[:, 0], self.trajectory[:, 1]
-        R_center = (H + delta) * np.tan(psi) + self.drift
+        R_center = (D + delta) * np.tan(psi) + self.drift
         x_center, y_center = R_center * np.cos(theta), R_center * np.sin(theta)
 
         # The max radius of the filter pattern
@@ -175,12 +235,17 @@ class Physics:
 
 class System:
     def __init__(self, mask, physics):
+        # TODO: obsolete mask
         self.mask = mask
+        self.stencil = mask
         self.physics = physics
         self.results = None
         self.h = None
 
-    def simulate(self, h):
+    def simulate_old(self, h):
+        """
+        Legacy method to use full convolution
+        """
         # Generate mask and physics matrices
         # shrink = -self.mask.delta * np.tan(np.deg2rad(self.physics.psi))
         self.h = h
@@ -204,6 +269,49 @@ class System:
         result = result[pad_width:-pad_width, pad_width:-pad_width]
         self.results = (result, x_range, y_range)
         return self.results
+
+    def simulate_unit_cell(self, h):
+        """Only simulate the unit cell result 
+        """
+        self.h = h
+        shrink = 0
+        (M_uc,
+         x_range_uc,
+         y_range_uc) = self.stencil._generate_mesh_unit_cell(h, shrink=shrink)
+        F, _, _ = self.physics.generate_F(
+            h=self.h,
+            D=self.stencil.D,
+            delta=self.mask.delta
+        )
+
+        print(M_uc.shape)
+        # Perform convolution
+        # TODO: make sure if we need larger tiles
+        m, n = M_uc.shape
+        tile_m, tile_n = 3, 3
+        M_tile = np.tile(M_uc, (tile_m, tile_n))
+        conv_results = fftconvolve(M_tile, F, mode="same")
+        # TODO: change if tile isn't 3
+        results_uc = conv_results[m: 2 * m,
+                                  n: 2 * n]
+
+        # Crop the result to the original size
+        # result = result[pad_width:-pad_width, pad_width:-pad_width]
+        self.results_uc = results_uc
+        self.range_uc = x_range_uc, y_range_uc
+        return
+
+    def simulate(self, h):
+        """New method using repeating unit cell
+         """
+        self.simulate_unit_cell(h)
+        repeat = self.stencil.repeat
+        # TODO: reset format
+        self.results = (np.tile(self.results_uc, (repeat[1], repeat[0])),
+                        # TODO: make sure tile is different from xy
+                        self.range_uc[0] * repeat[0],
+                        self.range_uc[1] * repeat[1])
+        return
 
     def save_tiff(self, h, fname):
         """Save the normalized height as a tiff file so that the file can be opened by
