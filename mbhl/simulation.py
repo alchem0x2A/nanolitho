@@ -1,15 +1,16 @@
-import numpy as np
 import math
 from pathlib import Path
+
 import matplotlib.pyplot as plt
+import numpy as np
+from PIL import Image
+from scipy.ndimage import binary_dilation, gaussian_filter, label, sobel
 from scipy.signal import fftconvolve
 from scipy.stats import gaussian_kde
-from scipy.ndimage import gaussian_filter, sobel, binary_dilation, label
-from shapely.geometry import Polygon, box, Point
 from shapely.affinity import rotate, translate
-from shapely.vectorized import contains
+from shapely.geometry import Point, Polygon, box
 from shapely.ops import unary_union
-from PIL import Image
+from shapely.vectorized import contains
 
 # All dimensions are in um
 mm = 1000
@@ -28,7 +29,6 @@ def Rectangle(x, y, w, h):
 
 def Square(x, y, w):
     return Rectangle(x, y, w, w)
-
 
 
 class Stencil:
@@ -67,8 +67,7 @@ class Stencil:
             raise TypeError("Only accepts Mask instance")
 
     def _create_repeat_tiles(self, repeat_x=1, repeat_y=1, shrink=0):
-        """Create tiles with both x and y repeat
-        """
+        """Create tiles with both x and y repeat"""
         # TODO: implement method to wrap back to cell
         all_patches = []
         cw, ch = self.unit_cell
@@ -88,22 +87,20 @@ class Stencil:
         Note this method is grossly inefficient.
         If edge effect can be ignore, use _create_repeat_tiles instead
         """
-        total_union = self._create_repeat_tiles(repeat_x=self.repeat[0],
-                                                repeat_y=self.repeat[1],
-                                                shrink=shrink)
+        total_union = self._create_repeat_tiles(
+            repeat_x=self.repeat[0], repeat_y=self.repeat[1], shrink=shrink
+        )
         return total_union
-    
+
     def _generate_mesh_unit_cell(self, h=10 * nm, shrink=0):
         """Generate a per-unit-cell mesh grid with spacing h
-        Should consider periodic images 
+        Should consider periodic images
         """
         # TODO: make sure the tiles are always wraped to first unit
         # cell
         # TODO: make sure 9 unit cells are necessary
         cw, ch = self.unit_cell
-        union_3x3 = self._create_repeat_tiles(repeat_x=3,
-                                              repeat_y=3,
-                                              shrink=shrink)
+        union_3x3 = self._create_repeat_tiles(repeat_x=3, repeat_y=3, shrink=shrink)
         # Make sure the matrix is exactly 3M x 3N
         # this will create a small difference between h in both directions
         N, M = int(cw // h), int(ch // h)
@@ -116,7 +113,7 @@ class Stencil:
         bin_mask = contains(union_3x3, xmesh, ymesh)
         # Pick the values from the center cell
         # the binary mask has shape M x N
-        uc_mask = bin_mask[M: 2 * M, N: 2 * N]
+        uc_mask = bin_mask[M : 2 * M, N : 2 * N]
         uc_x_range = np.linspace(0, cw, N)
         uc_y_range = np.linspace(0, ch, M)
         return uc_mask, uc_x_range, uc_y_range
@@ -164,9 +161,11 @@ class Stencil:
         ax.set_ylabel("Y (μm)")
         return
 
+
 # TODO: obsolete class
 class Mask(Stencil):
     pass
+
 
 class Physics:
     """A general class for the physics (filter) behind the MBHL
@@ -182,12 +181,9 @@ class Physics:
         self.diffusion = diffusion
 
     # TODO: obsolete method
-    def generate_filter(self, h, H,
-                        delta=0 * nm,
-                        samples=10000,
-                        domain_ratio=1.5):
+    def generate_filter(self, h, H, delta=0 * nm, samples=10000, domain_ratio=1.5):
         return self.generate_F(h, H, delta, samples, domain_ratio)
-    
+
     def generate_F(self, h, D, delta=0 * nm, samples=10000, domain_ratio=1.5):
         """Generate the offset trajectory F on 2D mesh
         h: mesh spacing
@@ -271,17 +267,14 @@ class System:
         return self.results
 
     def simulate_unit_cell(self, h):
-        """Only simulate the unit cell result 
-        """
+        """Only simulate the unit cell result"""
         self.h = h
         shrink = 0
-        (M_uc,
-         x_range_uc,
-         y_range_uc) = self.stencil._generate_mesh_unit_cell(h, shrink=shrink)
+        (M_uc, x_range_uc, y_range_uc) = self.stencil._generate_mesh_unit_cell(
+            h, shrink=shrink
+        )
         F, _, _ = self.physics.generate_F(
-            h=self.h,
-            D=self.stencil.D,
-            delta=self.mask.delta
+            h=self.h, D=self.stencil.D, delta=self.mask.delta
         )
 
         print(M_uc.shape)
@@ -292,8 +285,7 @@ class System:
         M_tile = np.tile(M_uc, (tile_m, tile_n))
         conv_results = fftconvolve(M_tile, F, mode="same")
         # TODO: change if tile isn't 3
-        results_uc = conv_results[m: 2 * m,
-                                  n: 2 * n]
+        results_uc = conv_results[m : 2 * m, n : 2 * n]
 
         # Crop the result to the original size
         # result = result[pad_width:-pad_width, pad_width:-pad_width]
@@ -302,15 +294,16 @@ class System:
         return
 
     def simulate(self, h):
-        """New method using repeating unit cell
-         """
+        """New method using repeating unit cell"""
         self.simulate_unit_cell(h)
         repeat = self.stencil.repeat
         # TODO: reset format
-        self.results = (np.tile(self.results_uc, (repeat[1], repeat[0])),
-                        # TODO: make sure tile is different from xy
-                        self.range_uc[0] * repeat[0],
-                        self.range_uc[1] * repeat[1])
+        self.results = (
+            np.tile(self.results_uc, (repeat[1], repeat[0])),
+            # TODO: make sure tile is different from xy
+            self.range_uc[0] * repeat[0],
+            self.range_uc[1] * repeat[1],
+        )
         return
 
     def save_tiff(self, h, fname):
@@ -323,7 +316,7 @@ class System:
         z_image = Image.fromarray(prob)
         z_image_file = Path(fname)
         z_image.save(z_image_file)
-        
+
     def draw(
         self,
         ax,
