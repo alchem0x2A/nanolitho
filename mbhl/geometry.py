@@ -31,13 +31,65 @@ def Square(x, y, w):
     return Rectangle(x, y, w, w)
 
 
+class Mesh:
+    """
+    A 2D mesh grid for a geometry.
+
+    Attributes:
+    - mask: Numpy array for the mesh (2D)
+    - x_range: (x_min, x_max) of the mesh
+    - y_range: (y_min, y_max) of the mesh
+    """
+
+    def __init__(self, mask, x_range, y_range):
+        self.mask = mask
+        self.x_range = x_range
+        self.y_range = y_range
+
+    @property
+    def extent(self):
+        """Combine range to extent for matplotlib's imshow"""
+        return (self.x_range[0], self.x_range[-1], self.y_range[0], self.y_range[-1])
+
+    def __mul__(self, repeat):
+        """Allow making a tile of the mesh
+
+        The new mesh uses the numpy.tile method to create a mesh
+        repeat: repeat in x- and y-directions
+                (the array shape will be swapped)
+        """
+        if not isinstance(repeat, (tuple, list)) or len(repeat) != 2:
+            raise ValueError("Repeat must be a tuple or list of two integers (nx, ny).")
+
+        nx, ny = repeat
+        # Extend the ranges
+        x_spacing = self.x_range[1] - self.x_range[0]
+        y_spacing = self.y_range[1] - self.y_range[0]
+
+        new_x_range = np.arange(
+            self.x_range[0],
+            self.x_range[0] + nx * len(self.x_range) * x_spacing,
+            x_spacing,
+        )
+        new_y_range = np.arange(
+            self.y_range[0],
+            self.y_range[0] + ny * len(self.y_range) * y_spacing,
+            y_spacing,
+        )
+
+        # Tiled mask have shape ny X nx
+
+        tiled_mask = np.tile(self.mask, (ny, nx))
+        return Mesh(tiled_mask, new_x_range, new_y_range)
+
+
 class Geometry:
     """
     A 2D geometry class analogous to ASE's Atoms for defining unit cells,
     patches, and periodic boundary conditions.
     """
 
-    def __init__(self, patches, cell=None, pbc=(True, True)):
+    def __init__(self, patches, cell=None, pbc=(True, True), shrink=0.0):
         """
         Initialize the 2D geometry.
 
@@ -45,10 +97,12 @@ class Geometry:
         - patches: List of Shapely shapes defining the geometry.
         - cell: Tuple (width, height) of the unit cell.
         - pbc: Tuple (bool, bool), periodic boundary conditions along x and y.
+        - shrink: boundary shink of the objects
         """
         self.patches = patches
         self.cell = cell
         self.pbc = pbc
+        self.shrink = shrink
 
     @property
     def cell(self):
@@ -85,6 +139,7 @@ class Geometry:
         """
         return all(self.pbc)
 
+    @property
     def bounds(self):
         """
         Calculate the bounding box of the geometry.
@@ -95,6 +150,61 @@ class Geometry:
         else:
             union = unary_union(self.patches)
             return union.bounds
+
+    @property
+    def union(self):
+        """The shapely union object containing all patches in
+        the geometry
+        """
+        union = unary_union([patch.buffer(-self.shrink) for patch in self.patches])
+        return union
+
+    def generate_mesh(self, h=None, divisions=None, shrink=0):
+        """
+        Generate a mesh grid for the geometry.
+
+        See docstring above for details.
+        """
+        if (h is None and divisions is None) or (
+            h is not None and divisions is not None
+        ):
+            raise ValueError("Specify exactly one of `h` or `divisions`.")
+
+        # Make repeated tiles for periodic system
+        rep = 3 if self.is_periodic else 1
+        tiles = self.make_tiles(repeat=(rep, rep))
+        union = tiles.union
+        # bounds for the tiled union
+        bounds = union.bounds() if not tiles.is_periodic else (0, 0, *tiles.cell)
+        # Width for the tile, considering the repetition
+        # bounds: (xmin, ymin, xmax, ymax)
+        tile_w, tile_h = bounds[2] - bounds[0], bounds[3] - bounds[1]
+        # Dimension for the final mesh
+        mesh_w, mesh_h = tile_w / rep, tile_h / rep
+
+        # Nx, Ny are number of grids in the final mesh
+        if divisions is not None:
+            if isinstance(divisions, (int, float)):
+                divisions = (int(divisions), int(divisions))
+            Nx, Ny = divisions
+        else:
+            Nx, Ny = int(mesh_w // h), int(mesh_h // h)
+        # We cannot guarantee that hx, hy are exactly h
+        # import pdb; pdb.set_trace()
+        hx, hy = mesh_w / Nx, mesh_h / Ny
+
+        tile_x_range = np.linspace(bounds[0], bounds[2], Nx * rep)
+        tile_y_range = np.linspace(bounds[1], bounds[3], Ny * rep)
+        mesh_x_range = np.arange(bounds[0], bounds[0] + mesh_w, hx)
+        mesh_y_range = np.arange(bounds[1], bounds[1] + mesh_h, hy)
+        print(tile_x_range.shape, mesh_x_range.shape)
+        # xmesh and ymesh are of shape (Ny, Nx)
+        tile_xmesh, tile_ymesh = np.meshgrid(tile_x_range, tile_y_range)
+        mask = contains(union, tile_xmesh, tile_ymesh)
+        if self.is_periodic:
+            # Make sure Nx and Ny are swapped
+            mask = mask[Ny : (rep - 1) * Ny, Nx : (rep - 1) * Nx]
+        return Mesh(mask, mesh_x_range, mesh_y_range)
 
     def copy(self):
         """Create a copy of geometry."""
@@ -158,7 +268,9 @@ class Geometry:
         new_cell = self.cell if self.is_periodic else (0.0, 0.0)
         return Geometry(patches=combined_patches, cell=new_cell, pbc=self.pbc)
 
-    def draw(self, ax=None, repeat=(1, 1), npts=1000, cmap="gray", show_unit_cell=True):
+    def draw(
+        self, ax=None, repeat=(1, 1), divisions=1000, cmap="gray", show_unit_cell=True
+    ):
         """
         Visualize the geometry and unit cell in a quick way
 
@@ -171,15 +283,10 @@ class Geometry:
             import matplotlib.pyplot as plt
 
             fig, ax = plt.subplots()
-        tiles = self.make_tiles(repeat=repeat) if self.is_periodic else self
-        union = unary_union(tiles.patches)
-        minx, miny, maxx, maxy = tiles.bounds()
-        x_range = np.linspace(minx, maxx, npts)
-        y_range = np.linspace(miny, maxy, npts)
-        xmesh, ymesh = np.meshgrid(x_range, y_range)
-        mask = contains(union, xmesh.ravel(), ymesh.ravel()).reshape(xmesh.shape)
-        extent = (minx / um, maxx / um, miny / um, maxy / um)
-        ax.imshow(mask, extent=extent, origin="lower", cmap=cmap)
+        # We could actually allow any repeat
+        mesh = self.generate_mesh(divisions=divisions) * repeat
+        minx, miny = mesh.extent[0], mesh.extent[2]
+        ax.imshow(mesh.mask, extent=mesh.extent, origin="lower", cmap=cmap)
         ax.set_xlabel("X (um)")
         ax.set_ylabel("Y (um)")
         if show_unit_cell and all(self.cell > 0):
