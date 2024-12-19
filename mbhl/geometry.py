@@ -308,13 +308,26 @@ def hexagonal_hole_lattice(
         "vertical",
         "horizontal",
     ), "Orientation must be either 'vertical' or 'horizontal'"
-
-    if orientation == "horizontal":
-        patches = [Circle(0, 0, r), Circle(L / 2, L * sqrt3 / 2, r)]
-        cell = (L, L * sqrt3)
+    if orientation == "vertical":
+        cell = (L * sqrt3, L * 3)
+        patches = [
+            Circle(0, 0, r),
+            Circle(L * sqrt3 / 2, L / 2, r),
+            Circle(L * sqrt3 / 2, L * 3 / 2, r),
+            Circle(L * sqrt3 / 2, L * 5 / 2, r),
+            Circle(L * sqrt3, L, r),
+            Circle(L * sqrt3, L * 2, r),
+        ]
     else:
-        patches = [Circle(0, 0, r), Circle(L * sqrt3 / 2, L / 2, r)]
-        cell = (L * sqrt3, L)
+        cell = (L * 3, L * sqrt3)
+        patches = [
+            Circle(0, 0, r),
+            Circle(L / 2, L / 2 * sqrt3, r),
+            Circle(L * 3 / 2, L / 2 * sqrt3, r),
+            Circle(L * 5 / 2, L * sqrt3 / 2, r),
+            Circle(L, L * sqrt3, r),
+            Circle(L * 2, L * sqrt3, r),
+        ]
     return Geometry(patches=patches, cell=cell, pbc=(True, True))
 
 
