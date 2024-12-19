@@ -383,3 +383,35 @@ def diamond_hole_lattice(r=None, L=None, diameter=None, spacing=None):
         Circle(L * sqrt2 / 2, L * sqrt2 / 2, r),
     ]
     return Geometry(patches=patches, cell=cell, pbc=(True, True))
+
+
+def line_lattice(s1, s2, orientation="horizontal", length_ratio_nonperiodic=1.0):
+    """Create a line (slit) array from slit width
+    s1 and edge-to-edeg spacing s2
+
+    Parameters:
+    - s1: slit width
+    - s2: edge-to-edge distance between slits
+    - orientation: whether the slits are horizontal (x-)
+                   or vertically (y-) aligned
+    - length_ratio_nonperiodic: length of the rectangle representing
+                                the slit in the "non-periodic" direction
+                                the length is (s1+s2) * ratio
+
+    Returns:
+    - A periodic `Geometry` object representing the slit lattice
+    """
+    W = s1 + s2
+    H = W * length_ratio_nonperiodic
+    orientation = orientation.lower()
+    assert orientation in (
+        "vertical",
+        "horizontal",
+    ), "Orientation must be either 'vertical' or 'horizontal'"
+    if orientation == "vertical":
+        patches = [Rectangle(W / 2 - s1 / 2, 0, s1, H)]
+        cell = (W, H)
+    else:
+        patches = [Rectangle(0, W / 2 - s1 / 2, H, s1)]
+        cell = (H, W)
+    return Geometry(patches=patches, cell=cell, pbc=(True, True))
