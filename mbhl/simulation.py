@@ -8,27 +8,10 @@ from scipy.ndimage import binary_dilation, gaussian_filter, label, sobel
 from scipy.signal import fftconvolve
 from scipy.stats import gaussian_kde
 from shapely.affinity import rotate, translate
-from shapely.geometry import Point, Polygon, box
 from shapely.ops import unary_union
 from shapely.vectorized import contains
 
-# All dimensions are in um
-mm = 1000
-um = 1.0
-nm = 0.001
-
-
-def Circle(x, y, r):
-    return Point(x, y).buffer(r)
-
-
-def Rectangle(x, y, w, h):
-    rectangle = Polygon([(x, y), (x, y + h), (x + w, y + h), (x + w, y)])
-    return rectangle
-
-
-def Square(x, y, w):
-    return Rectangle(x, y, w, w)
+from .utils import Circle, Rectangle, Square, nm, um
 
 
 class Stencil:
