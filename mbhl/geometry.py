@@ -4,7 +4,7 @@ from shapely.geometry import Point, Polygon, box
 from shapely.ops import unary_union
 from shapely.vectorized import contains
 
-from .utils import sqrt3
+from .utils import nm, sqrt2, sqrt3, um
 
 # Definition of geometries
 
@@ -158,25 +158,50 @@ class Geometry:
         new_cell = self.cell if self.is_periodic else (0.0, 0.0)
         return Geometry(patches=combined_patches, cell=new_cell, pbc=self.pbc)
 
-    def draw(self, ax, repeat=(1, 1), cmap="gray"):
+    def draw(self, ax=None, repeat=(1, 1), npts=1000, cmap="gray", show_unit_cell=True):
         """
-        Visualize the geometry.
+        Visualize the geometry and unit cell in a quick way
 
         Parameters:
         - ax: Matplotlib axis.
         - repeat: Tuple (repeat_x, repeat_y) for replication.
         """
+
+        if ax is None:
+            import matplotlib.pyplot as plt
+
+            fig, ax = plt.subplots()
         tiles = self.make_tiles(repeat=repeat) if self.is_periodic else self
         union = unary_union(tiles.patches)
         minx, miny, maxx, maxy = tiles.bounds()
-        x_range = np.linspace(minx, maxx, 1000)
-        y_range = np.linspace(miny, maxy, 1000)
+        x_range = np.linspace(minx, maxx, npts)
+        y_range = np.linspace(miny, maxy, npts)
         xmesh, ymesh = np.meshgrid(x_range, y_range)
         mask = contains(union, xmesh.ravel(), ymesh.ravel()).reshape(xmesh.shape)
-        extent = (minx, maxx, miny, maxy)
-        ax.imshow(mask, extent=extent, cmap=cmap)
-        ax.set_xlabel("X")
-        ax.set_ylabel("Y")
+        extent = (minx / um, maxx / um, miny / um, maxy / um)
+        ax.imshow(mask, extent=extent, origin="lower", cmap=cmap)
+        ax.set_xlabel("X (um)")
+        ax.set_ylabel("Y (um)")
+        if show_unit_cell and all(self.cell > 0):
+            from matplotlib.patches import Rectangle
+
+            # Calculate unit cell dimensions in μm
+            cell_width, cell_height = self.cell[0] / um, self.cell[1] / um
+            for i in range(repeat[0]):
+                for j in range(repeat[1]):
+                    x_start = i * cell_width + minx / um
+                    y_start = j * cell_height + miny / um
+                    rect = Rectangle(
+                        (x_start, y_start),
+                        cell_width,
+                        cell_height,
+                        edgecolor="red",
+                        facecolor="none",
+                        linestyle="dotted",
+                        linewidth=1,
+                    )
+                    ax.add_patch(rect)
+        return ax
 
 
 def _sanitize_rL_input(r=None, L=None, diameter=None, spacing=None):
@@ -284,20 +309,12 @@ def hexagonal_hole_lattice(
         "horizontal",
     ), "Orientation must be either 'vertical' or 'horizontal'"
 
-    if orientation == "vertical":
+    if orientation == "horizontal":
         patches = [Circle(0, 0, r), Circle(L / 2, L * sqrt3 / 2, r)]
         cell = (L, L * sqrt3)
     else:
         patches = [Circle(0, 0, r), Circle(L * sqrt3 / 2, L / 2, r)]
         cell = (L * sqrt3, L)
-    cell = (L * 3, L * sqrt3)
-    patches = [
-        Circle(0, 0, r),
-        Circle(L / 2, L / 2 * sqrt3, r),
-        Circle(L * 3 / 2, L / 2 * sqrt3, r),
-        Circle(L * 2, L * sqrt3, r),
-    ]
-
     return Geometry(patches=patches, cell=cell, pbc=(True, True))
 
 
@@ -346,9 +363,10 @@ def diamond_hole_lattice(r=None, L=None, diameter=None, spacing=None):
       *
     """
     r, L = _sanitize_rL_input(r, L, diameter, spacing)
-    cell = (L * np.sqrt(2), L * np.sqrt(2))
+    cell = (L * sqrt2, L * sqrt2)
 
     patches = [
         Circle(0, 0, r),
+        Circle(L * sqrt2 / 2, L * sqrt2 / 2, r),
     ]
     return Geometry(patches=patches, cell=cell, pbc=(True, True))

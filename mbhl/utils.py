@@ -6,3 +6,4 @@ mm = 1000
 um = 1.0
 nm = 0.001
 sqrt3 = math.sqrt(3)
+sqrt2 = math.sqrt(2)
