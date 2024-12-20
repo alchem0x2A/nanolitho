@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.ndimage import label
 from shapely.affinity import translate
 from shapely.geometry import Point, Polygon, box
 from shapely.ops import unary_union
@@ -41,15 +42,33 @@ class Mesh:
     - y_range: (y_min, y_max) of the mesh
     """
 
-    def __init__(self, mask, x_range, y_range):
-        self.mask = mask
+    def __init__(self, array, x_range, y_range):
+        self.array = array
+        if len(self.array.shape) != 2:
+            raise ValueError("Array must be 2D!")
         self.x_range = x_range
         self.y_range = y_range
 
     @property
     def extent(self):
         """Combine range to extent for matplotlib's imshow"""
-        return (self.x_range[0], self.x_range[-1], self.y_range[0], self.y_range[-1])
+        return np.array(
+            [self.x_range[0], self.x_range[-1], self.y_range[0], self.y_range[-1]]
+        )
+
+    def to_label(self):
+        """Create a label matrix for binary mesh
+
+        Returns:
+        - New mesh with labeled mask
+        - number of features
+        """
+        if not np.array_equal(self.array, self.array.astype(bool)):
+            raise ValueError("Mesh array must be binary to generate labels")
+
+        # Perform connected component labeling
+        labeled_array, num_features = label(self.array)
+        return Mesh(labeled_array, self.x_range, self.y_range), num_features
 
     def __mul__(self, repeat):
         """Allow making a tile of the mesh
@@ -79,8 +98,8 @@ class Mesh:
 
         # Tiled mask have shape ny X nx
 
-        tiled_mask = np.tile(self.mask, (ny, nx))
-        return Mesh(tiled_mask, new_x_range, new_y_range)
+        tiled_array = np.tile(self.array, (ny, nx))
+        return Mesh(tiled_array, new_x_range, new_y_range)
 
 
 class Geometry:
@@ -335,7 +354,7 @@ class Geometry:
         # We could actually allow any repeat
         mesh = self.generate_mesh(divisions=divisions) * repeat
         minx, miny = mesh.extent[0], mesh.extent[2]
-        ax.imshow(mesh.mask, extent=mesh.extent, origin="lower", cmap=cmap)
+        ax.imshow(mesh.array, extent=mesh.extent, origin="lower", cmap=cmap)
         ax.set_xlabel("X (um)")
         ax.set_ylabel("Y (um)")
         if show_unit_cell and all(self.cell > 0):

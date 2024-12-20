@@ -2,8 +2,8 @@ import math
 import warnings
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.projections.polar import PolarAxes
 from PIL import Image
 from scipy.ndimage import binary_dilation, gaussian_filter, label, sobel
 from scipy.signal import fftconvolve
@@ -12,8 +12,8 @@ from shapely.affinity import rotate, translate
 from shapely.ops import unary_union
 from shapely.vectorized import contains
 
-from .geometry import Geometry
-from .utils import Circle, Rectangle, Square, deprecated, nm, um
+from .geometry import Geometry, Mesh
+from .utils import deprecated, nm, um
 
 
 class Stencil:
@@ -30,19 +30,35 @@ class Stencil:
         stencil = Stencil(geometry, pad=100 * nm, thickness=200 * nm, spacing=2.5 * um)
     """
 
+    default_division = 256
+
     def __init__(
         self,
         geometry,
         pad=0 * nm,
         thickness=100 * nm,
         spacing=2.5 * um,
+        h=None,
     ):
+        """
+        h: default mesh spacing for the stencil,
+           if none, h = dimension / default_division
+        """
         self.geometry = self._assign_geometry(geometry)
         self.delta = thickness
         self.D = spacing
         self.pad = pad
         # Domain is the min_x, max_x, min_y, max_y
-        self.domain = None
+        self.domain = self.geometry.bounds
+        # assign h to self
+        self.h = self._assign_h(h)
+
+    def _assign_h(self, h=None):
+        """Assign the mesh grid h to the geometry"""
+        if h is None:
+            cw = self.domain[2] - self.domain[0]
+            h = cw / self.default_division
+        return h
 
     def _assign_geometry(self, geometry):
         """
@@ -117,30 +133,66 @@ class Mask(Stencil):
 
 class Physics:
     """A general class for the physics (filter) behind the MBHL
-    Note the thickness (delta) and spacing (H) are directly affecting the filter pattern
-
-    Trajectory is an array of (psi, theta) values on the hemisphere
+    Trajectory is an array of (theta, phi) values on the hemisphere
     """
 
-    def __init__(self, trajectory, psi_broadening=0.05, drift=0 * nm, diffusion=5 * nm):
-        self.trajectory = np.atleast_2d(trajectory)
-        self.xi = psi_broadening
+    def __init__(
+        self,
+        trajectory,
+        phi_first=False,
+        radians=True,
+        phi_broadening=0.05,
+        drift=0 * nm,
+        diffusion=5 * nm,
+    ):
+        """Generate a Physics object from trajectory (theta, phi)
+
+        Parameters:
+        - trajectory: a vector of (theta, phi)
+                      or (phi, theta) if phi_first is True
+        - phi_first: whether phi comes first in the trajectory vector
+                     for legacy code support
+        - radians: whether the trajectory is provided in radians or degrees
+        - phi_broadening: broadening of the phi angle from beam
+                          (currently not used)
+        - drift: directional drift on the surface (Rs)
+        - diffusion: non-directional surface broadening (Rd)
+        """
+        trajectory = np.atleast_2d(trajectory)
+        if not radians:
+            trajectory = np.radians(trajectory)
+        if phi_first:
+            self.phi, self.theta = trajectory[:, 0], trajectory[:, 1]
+        else:
+            self.phi, self.theta = trajectory[:, 1], trajectory[:, 2]
+        self.xi = phi_broadening
         self.drift = drift
         self.diffusion = diffusion
 
-    # TODO: obsolete method
-    def generate_filter(self, h, H, delta=0 * nm, samples=10000, domain_ratio=1.5):
-        return self.generate_F(h, H, delta, samples, domain_ratio)
+    def generate_filter(self, *arg, **argv):
+        raise NotImplementedError(
+            ("`generate_fileter` is deprecated! " "Use generate_F instead")
+        )
 
-    def generate_F(self, h, D, delta=0 * nm, samples=10000, domain_ratio=1.5):
-        """Generate the offset trajectory F on 2D mesh
-        h: mesh spacing
+    def generate_F(self, stencil, domain_ratio=1.5):
+        """Generate the offset mesh based on the stencil
+
+        The following parameters are determined from the stencil geometry:
+        mesh spacing (h)
+        membrane-to-substrate spacing (D)
+        membrane thickness (delta)
+
+        Parameters:
+        - stencil: a Stencil object
+        - domain_ratio: factor to extend the mesh domain
+                        relative to max radius.
         """
 
         # Create the "central" trajectory points
-        psi, theta = self.trajectory[:, 0], self.trajectory[:, 1]
-        R_center = (D + delta) * np.tan(psi) + self.drift
-        x_center, y_center = R_center * np.cos(theta), R_center * np.sin(theta)
+        h, D, delta = stencil.h, stencil.D, stencil.delta
+        phi, theta = self.phi, self.theta
+        R_center = (D + delta) * np.tan(phi) + self.drift
+        x_center, y_center = (R_center * np.cos(theta), R_center * np.sin(theta))
 
         # The max radius of the filter pattern
         R_max = np.max(np.abs(R_center))
@@ -148,33 +200,80 @@ class Physics:
         x_range = np.arange(-xy_lim, xy_lim, h)
         y_range = np.arange(-xy_lim, xy_lim, h)
         xmesh, ymesh = np.meshgrid(x_range, y_range)
-        P_mesh, _, _ = np.histogram2d(
+        F_mesh, _, _ = np.histogram2d(
             x_center,
             y_center,
             bins=[xmesh.shape[0], ymesh.shape[1]],
             range=[[x_range.min(), x_range.max()], [y_range.min(), y_range.max()]],
         )
-        P_mesh = gaussian_filter(P_mesh, sigma=int(self.diffusion / h))
-        return P_mesh, x_range, y_range
+        F_mesh = gaussian_filter(F_mesh, sigma=int(self.diffusion / h))
+        return Mesh(F_mesh, x_range, y_range)
 
-    def draw(self, ax, h=10 * nm, H=2.5 * um, delta=0 * nm, cmap="gray"):
-        """Draw the mask pattern,
-        ax is an existing matplotlib axis
+    def draw(self, ax=None, stencil=None, grid="polar", cmap="gray", phi_max=None):
+        """Draw the offset trajectory pattern on polar or cartesian grids
+
+        Parameters:
+        - ax: matplotlib figure axis
+        - stencil: a Stencil object for plotting on the cartesian grid
+        - grid: either 'polar' or 'cartesian'
+        - cmap: color map for drawing on cartesian grid
+        - phi_max: maximum phi value used for plotting on polar grids
+                   (in radians)
         """
-        bin_mask, x_range, y_range = self.generate_filter(h, H, delta)
-        ax.imshow(
-            bin_mask,
-            extent=(
-                x_range[0] / um,
-                x_range[-1] / um,
-                y_range[0] / um,
-                y_range[-1] / um,
-            ),
-            cmap=cmap,
-        )
-        ax.set_xlabel("X (μm)")
-        ax.set_ylabel("Y (μm)")
-        return
+        grid = grid.lower()
+        assert grid in (
+            "polar",
+            "cartesian",
+        ), "`grid` can either be 'polar' or 'cartesian'"
+        if ax is None:
+            import matplotlib.pyplot as plt
+
+            if grid == "polar":
+                fig, ax = plt.subplots(subplot_kw={"projection": "polar"})
+            else:
+                fig, ax = plt.subplots()
+
+        if grid == "polar":
+            if not isinstance(ax, PolarAxes):
+                raise ValueError(
+                    (
+                        "The provided axis must have a "
+                        "polar projection for 'polar' grid."
+                    )
+                )
+
+            # Plot trajectory in polar coordinates
+            if phi_max is None:
+                phi_max = min(np.pi / 2, 1.5 * np.max(self.phi))
+            else:
+                phi_max = phi_max
+            ax.scatter(self.theta, np.sin(self.phi), marker="o", label="Trajectory")
+
+            ax.set_theta_zero_location("S")
+            ax.set_theta_direction(1)
+            rticks_raw = np.linspace(0, phi_max, 5)
+            rticks_label_deg = [f"{v:.2f}°" for v in np.degrees(np.arcsin(rticks_raw))]
+            ax.set_rmax(np.sin(phi_max))
+            ax.set_rticks(rticks_raw, labels=rticks_label_deg)
+            ax.set_xlabel(r"$\theta$")
+            ax.set_ylabel(r"$\phi$")
+
+        elif grid == "cartesian":
+            # Cartesian grid: Generate and plot the filter
+            if stencil is None:
+                raise ValueError(
+                    ("No stencil provided to generate " "a cartesian projection!")
+                )
+            mesh = self.generate_F(stencil)
+            ax.imshow(
+                mesh.mask,
+                extent=mesh.extent / um,
+                origin="lower",
+                cmap=cmap,
+            )
+            ax.set_xlabel("X (μm)")
+            ax.set_ylabel("Y (μm)")
+        return ax
 
 
 class System:
