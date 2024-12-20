@@ -159,6 +159,55 @@ class Geometry:
         union = unary_union([patch.buffer(-self.shrink) for patch in self.patches])
         return union
 
+    def translate(self, displacement):
+        """
+        Translate all patches in the geometry by the specified displacement.
+
+        Parameters:
+        - displacement: Tuple (dx, dy) specifying
+          the translation in the x and y directions.
+
+        Behavior:
+        - For periodic geometry the displacement is applied modulo
+          the unit cell dimensions,
+        - Otherwise the patches are directly translated
+
+        Returns:
+        - None, the patches are translated in-place
+        """
+        if not isinstance(displacement, (tuple, list)) or len(displacement) != 2:
+            raise ValueError("Displacement must be a tuple (dx, dy).")
+
+        dx, dy = displacement
+
+        if self.is_periodic:
+            # Apply displacement modulo the unit cell dimensions
+            cell_w, cell_h = self.cell
+            dx %= cell_w
+            dy %= cell_h
+
+            # Translate patches so that they move no more than
+            # half of cell dimension
+            # Note: this method does not always ensure the center
+            # lied inside the cell
+            translated_patches = [
+                translate(
+                    patch,
+                    xoff=-cell_w + dx if dx > cell_w / 2 else dx,
+                    yoff=-cell_h + dy if dy > cell_h / 2 else dy,
+                )
+                for patch in self.patches
+            ]
+        else:
+            # For non-periodic geometries, apply the displacement directly
+            translated_patches = [
+                translate(patch, xoff=dx, yoff=dy) for patch in self.patches
+            ]
+            self.cell = None
+
+        self.patches = translated_patches
+        return
+
     def generate_mesh(self, h=None, divisions=None, shrink=0):
         """
         Generate a mesh grid for the geometry.

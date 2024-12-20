@@ -1,4 +1,5 @@
 import math
+import warnings
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -11,118 +12,82 @@ from shapely.affinity import rotate, translate
 from shapely.ops import unary_union
 from shapely.vectorized import contains
 
-from .utils import Circle, Rectangle, Square, nm, um
+from .geometry import Geometry
+from .utils import Circle, Rectangle, Square, deprecated, nm, um
 
 
 class Stencil:
-    """Create an object for the stencil from a list of shape objects
+    """
+    A Stencil object for the stencil membrane in MBHL.
+
+    The stencil can is constructed using one or more
+    Geometry object.
 
     Example:
-
-    # To create square circle arrays with radius of 400 nm and 200 nm spacing
-    # and create 100 nm padding
-    patches = [Circle(0, 0, 250 * nm)]
-    mask = Mask(patches, unit_cell=(600 * nm, 600 * nm), repeat=(10, 10))
+        # To create a square array of circles with a radius of 400 nm,
+        # a center-to-center spacing of 600 nm, and 100 nm padding:
+        geometry = Geometry([Circle(0, 0, 250 * nm)], cell=(600 * nm, 600 * nm), pbc=(True, True))
+        stencil = Stencil(geometry, pad=100 * nm, thickness=200 * nm, spacing=2.5 * um)
     """
 
     def __init__(
         self,
-        patches,
-        unit_cell=(1.0 * um, 1.0 * um),
-        repeat=(1, 1),
+        geometry,
         pad=0 * nm,
         thickness=100 * nm,
         spacing=2.5 * um,
     ):
-        self.patches = patches
-        self.unit_cell = unit_cell
-        self.repeat = repeat
+        self.geometry = self._assign_geometry(geometry)
         self.delta = thickness
-        # TODO: obsolete H. Should use D
-        self.H = spacing
         self.D = spacing
         self.pad = pad
         # Domain is the min_x, max_x, min_y, max_y
         self.domain = None
 
-    def __add__(self, mask):
-        if not isinstance(mask, Mask):
-            raise TypeError("Only accepts Mask instance")
-
-    def _create_repeat_tiles(self, repeat_x=1, repeat_y=1, shrink=0):
-        """Create tiles with both x and y repeat"""
-        # TODO: implement method to wrap back to cell
-        all_patches = []
-        cw, ch = self.unit_cell
-        for i in range(repeat_x):
-            for j in range(repeat_y):
-                for patch in self.patches:
-                    new_patch = patch.buffer(shrink)
-                    all_patches.append(translate(new_patch, xoff=cw * i, yoff=ch * j))
-        total_union = unary_union(all_patches)
-        return total_union
-
-    # TODO: obsolete
-    def create_tiles(self, shrink=0):
-        """Legacy method to create tiles of
-        the patches with some shrink (forbidden area)
-
-        Note this method is grossly inefficient.
-        If edge effect can be ignore, use _create_repeat_tiles instead
+    def _assign_geometry(self, geometry):
         """
-        total_union = self._create_repeat_tiles(
-            repeat_x=self.repeat[0], repeat_y=self.repeat[1], shrink=shrink
-        )
-        return total_union
+        Assign the input geometry to the stencil.
 
-    def _generate_mesh_unit_cell(self, h=10 * nm, shrink=0):
-        """Generate a per-unit-cell mesh grid with spacing h
-        Should consider periodic images
+        - If the input is a `Geometry` object, it is directly used.
+        - If the input is a list of `Geometry` objects,
+          they are combined using the `+` operator.
+
+        Parameters:
+        - geometry: A `Geometry` object or a list of `Geometry` objects.
+
+        Returns:
+        - A combined `Geometry` object.
         """
-        # TODO: make sure the tiles are always wraped to first unit
-        # cell
-        # TODO: make sure 9 unit cells are necessary
-        cw, ch = self.unit_cell
-        union_3x3 = self._create_repeat_tiles(repeat_x=3, repeat_y=3, shrink=shrink)
-        # Make sure the matrix is exactly 3M x 3N
-        # this will create a small difference between h in both directions
-        N, M = int(cw // h), int(ch // h)
-        hx, hy = cw / N, ch / M
-        x_range = np.linspace(0, 3 * cw, 3 * N)
-        y_range = np.linspace(0, 3 * ch, 3 * M)
-        xmesh, ymesh = np.meshgrid(x_range, y_range)
-        print(N, M)
-        print(xmesh.shape, ymesh.shape)
-        bin_mask = contains(union_3x3, xmesh, ymesh)
-        # Pick the values from the center cell
-        # the binary mask has shape M x N
-        uc_mask = bin_mask[M : 2 * M, N : 2 * N]
-        uc_x_range = np.linspace(0, cw, N)
-        uc_y_range = np.linspace(0, ch, M)
-        return uc_mask, uc_x_range, uc_y_range
-
-    # TODO: obsolete
-    def generate_mesh(self, h=10 * nm, domain=None, shrink=0):
-        """Legacy method to create a numpy array considering all repeats
-        as the mesh for the simulation domain"""
-        union = self.create_tiles(shrink=shrink)
-        if domain is None:
-            domain = union.bounds
-            if self.pad != 0:
-                new_domain = (
-                    domain[0] - self.pad,
-                    domain[1] - self.pad,
-                    domain[2] + self.pad,
-                    domain[3] + self.pad,
+        if isinstance(geometry, Geometry):
+            return geometry.copy()
+        elif isinstance(geometry, (tuple, list)):
+            if not all(isinstance(g, Geometry) for g in geometry):
+                raise TypeError(
+                    "All elements in the list must be instances of `Geometry`."
                 )
-                domain = new_domain
-        self.domain = domain
-        minx, miny, maxx, maxy = domain
-        x_range = np.arange(minx, maxx, h)
-        y_range = np.arange(miny, maxy, h)
-        xmesh, ymesh = np.meshgrid(x_range, y_range)
-        bin_mask = contains(union, xmesh, ymesh)
-        return bin_mask, x_range, y_range
+            combined_geometry = geometry[0].copy()
+            for g in geometry[1:]:
+                combined_geometry += g
+            return combined_geometry
+        else:
+            raise TypeError(
+                (
+                    "Input must be a `Geometry` object "
+                    "or a list of `Geometry` objects."
+                )
+            )
+
+    @property
+    def patches(self):
+        return self.geometry.patches
+
+    @property
+    def cell(self):
+        return self.geometry.patches
+
+    @property
+    def is_periodic(self):
+        return self.geometry.is_periodic
 
     def draw(self, ax, h=10 * nm, cmap="gray", vmax=None):
         """Draw the mask pattern with existing repeats
@@ -145,7 +110,7 @@ class Stencil:
         return
 
 
-# TODO: obsolete class
+@deprecated(("Please use `Stencil` as the class name " "instead of `Mask`"))
 class Mask(Stencil):
     pass
 
