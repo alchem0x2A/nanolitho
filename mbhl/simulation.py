@@ -97,9 +97,10 @@ class Stencil:
         """Generate mesh from geometry."""
         return self.geometry.generate_mesh(self.h)
 
-    def calculate_critical_phi(self, theta=0):
-        """Calculate the matrix of critical phi
-        at angle theta (counted from the +y axis)
+    def calculate_critical_phi(self, theta=0, r_search_interval=5):
+        """
+        Calculate the matrix of critical
+        phi at angle theta (counted from the +y axis).
 
         For each point (xm, xy) on the top level of the stencil,
         first calculate the longest distance Rm that a line
@@ -108,64 +109,81 @@ class Stencil:
 
         This code uses the search along the line-of-sight path
         along the direction (Rm * sin theta, - Rm * cos theta)
+        Handles both periodic and non-periodic geometries.
+
+        Parameters:
+        - theta: azimuthal angle in radians where the particle
+                 incidents
+        - r_search_interval: pixels that the function searches along the
+                             incidence line.
+                             Increase this value will make computation faster,
+                             but more rasterized results
+
+        Returns:
+        - Phic_mesh: mesh object with the same dimension as
+                     self.generate_mesh(), while the values are phi_c
+                     in radians
         """
         M_origin = self.generate_mesh()
-        if self.is_periodic:
-            M, recover_indices = M_origin.tiled_array(extra_x=1)
-        else:
-            pad = 5  # 5 extra pixels
-            M, recover_indices = M_origin.padded_array(pad_x=pad)
-        delta = self.delta
+        delta = self.delta  # Stencil thickness
         sin_theta = np.sin(theta)
         cos_theta = np.cos(theta)
-        rows, cols = M_origin.shape
-        # mesh spacing in real units
+
+        if self.geometry.is_periodic:
+            M, trim_indices = M_origin.tiled_array(extra_x=1, extra_y=1)
+        else:
+            M, trim_indices = M_origin.padded_array(pad_x=2, pad_y=2)
+
         dx_real = M_origin.x_range[1] - M_origin.x_range[0]
         dy_real = M_origin.y_range[1] - M_origin.y_range[0]
+        padded_rows, padded_cols = M.shape
+        origin_rows, origin_cols = M_origin.shape
 
-        # Determine maximum R in pixels
-        max_radius_pixels = int(
-            max(
-                rows / abs(cos_theta) if cos_theta != 0 else 0,
-                cols / abs(sin_theta) if sin_theta != 0 else 0,
-            )
+        # Calculate max radius using bounding box corners
+        corners = np.array(
+            [
+                [0, 0],
+                [0, origin_rows * dy_real],
+                [origin_cols * dx_real, 0],
+                [origin_cols * dx_real, origin_rows * dy_real],
+            ]
         )
+        distances = np.sqrt(
+            (corners[:, 0] * sin_theta) ** 2 + (corners[:, 1] * cos_theta) ** 2
+        )
+        max_radius_real = np.max(distances)
 
-        # Initialize Rm array
+        # Convert max radius to pixels
+        max_radius_pixels = int(max_radius_real / min(dx_real, dy_real))
+
+        # Initialize Rm array for the padded/periodic array
         Rm_array = np.ones_like(M, dtype=float) * -1
 
         # Iterate over radii
-        for R_pixels in range(0, max_radius_pixels + 1):
-            # Must count the initial
-            # Compute the offsets for the current radius
+        for R_pixels in range(0, max_radius_pixels + 1, r_search_interval):
             shift_x_pixels = int(R_pixels * sin_theta)
             shift_y_pixels = -int(R_pixels * cos_theta)
             R = np.sqrt(
                 (shift_x_pixels * dx_real) ** 2 + (shift_y_pixels * dy_real) ** 2
             )
 
-            # Calculate new coordinates
             new_x_pixels = np.clip(
-                np.arange(M.shape[1]) + shift_x_pixels, 0, M.shape[1] - 1
+                np.arange(padded_cols) + shift_x_pixels, 0, padded_cols - 1
             )
             new_y_pixels = np.clip(
-                np.arange(M.shape[0]) + shift_y_pixels, 0, M.shape[0] - 1
+                np.arange(padded_rows) + shift_y_pixels, 0, padded_rows - 1
             )
 
-            # Check if the new coordinates land on the solid mask
             on_mask = M[new_y_pixels[:, None], new_x_pixels[None, :]] == 0
-
-            # Update Rm values where a rim is encountered for the first time
             Rm_array[(Rm_array == -1) & on_mask] = R
 
-        # Replace remaining zeros (no rim found) with max_radius
         Rm_array[Rm_array == -1] = R
+        Rm_trimmed = Rm_array[trim_indices]
 
-        phic_array = np.arctan(Rm_array / delta)
+        phic_array = np.arctan(Rm_trimmed / delta)
 
-        phic_array_origin = phic_array[recover_indices]
         Phic_mesh = Mesh(
-            array=phic_array_origin, x_range=M_origin.x_range, y_range=M_origin.y_range
+            array=phic_array, x_range=M_origin.x_range, y_range=M_origin.y_range
         )
         return Phic_mesh
 
