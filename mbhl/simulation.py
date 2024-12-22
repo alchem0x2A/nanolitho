@@ -93,6 +93,82 @@ class Stencil:
                 )
             )
 
+    def generate_mesh(self):
+        """Generate mesh from geometry."""
+        return self.geometry.generate_mesh(self.h)
+
+    def calculate_critical_phi(self, theta=0):
+        """Calculate the matrix of critical phi
+        at angle theta (counted from the +y axis)
+
+        For each point (xm, xy) on the top level of the stencil,
+        first calculate the longest distance Rm that a line
+        (xm + Rm * sinθ, ym - Rm*cosθ) remains the same label
+        phi_c = arctan(Rm / δ)
+
+        This code uses the search along the line-of-sight path
+        along the direction (Rm * sin theta, - Rm * cos theta)
+        """
+        M_origin = self.generate_mesh()
+        if self.is_periodic:
+            M, recover_indices = M_origin.tiled_array(extra_x=1)
+        else:
+            pad = 5  # 5 extra pixels
+            M, recover_indices = M_origin.padded_array(pad_x=pad)
+        delta = self.delta
+        sin_theta = np.sin(theta)
+        cos_theta = np.cos(theta)
+        rows, cols = M_origin.shape
+        # mesh spacing in real units
+        dx_real = M_origin.x_range[1] - M_origin.x_range[0]
+        dy_real = M_origin.y_range[1] - M_origin.y_range[0]
+
+        # Determine maximum R in pixels
+        max_radius_pixels = int(
+            max(
+                rows / abs(cos_theta) if cos_theta != 0 else 0,
+                cols / abs(sin_theta) if sin_theta != 0 else 0,
+            )
+        )
+
+        # Initialize Rm array
+        Rm_array = np.ones_like(M, dtype=float) * -1
+
+        # Iterate over radii
+        for R_pixels in range(0, max_radius_pixels + 1):
+            # Must count the initial
+            # Compute the offsets for the current radius
+            shift_x_pixels = int(R_pixels * sin_theta)
+            shift_y_pixels = -int(R_pixels * cos_theta)
+            R = np.sqrt(
+                (shift_x_pixels * dx_real) ** 2 + (shift_y_pixels * dy_real) ** 2
+            )
+
+            # Calculate new coordinates
+            new_x_pixels = np.clip(
+                np.arange(M.shape[1]) + shift_x_pixels, 0, M.shape[1] - 1
+            )
+            new_y_pixels = np.clip(
+                np.arange(M.shape[0]) + shift_y_pixels, 0, M.shape[0] - 1
+            )
+
+            # Check if the new coordinates land on the solid mask
+            on_mask = M[new_y_pixels[:, None], new_x_pixels[None, :]] == 0
+
+            # Update Rm values where a rim is encountered for the first time
+            Rm_array[(Rm_array == -1) & on_mask] = R
+
+        # Replace remaining zeros (no rim found) with max_radius
+        Rm_array[Rm_array == -1] = R
+
+        phic_array = np.arctan(Rm_array / delta)
+
+        phic_array_origin = phic_array[recover_indices]
+        Phic_mesh = Mesh(
+            array=phic_array_origin, x_range=M_origin.x_range, y_range=M_origin.y_range
+        )
+        return Phic_mesh
+
     @property
     def patches(self):
         return self.geometry.patches
@@ -109,7 +185,8 @@ class Stencil:
         """Draw the mask pattern with existing repeats
         ax is an existing matplotlib axis
         """
-        bin_mask, x_range, y_range = self.generate_mesh(h)
+        # TODO: make sure ax is there!
+        bin_mask, x_range, y_range = self.generate_mesh()
         ax.imshow(
             bin_mask,
             extent=(
@@ -277,13 +354,49 @@ class Physics:
 
 
 class System:
-    def __init__(self, mask, physics):
-        # TODO: obsolete mask
-        self.mask = mask
-        self.stencil = mask
+    def __init__(self, stencil, physics):
+        self.stencil = stencil
         self.physics = physics
         self.results = None
-        self.h = None
+
+    @property
+    def h(self):
+        return self.stencil.h
+
+    def simulate(self, method="auto"):
+        """Simulate the convolution between stencil and physics
+
+        There are several methods to perform the convolution operation
+        - 'auto': default, automatically choose the fastest approach
+        - 'fast': use fftconvolve to compute the convolution,
+                 works only when membrane thickness delta is much
+                 smaller than membrane-to-substrate spacing D
+        - 'full': use custom real-space convolution considering
+                  the thickness and stencil hole positions
+
+        Returns:
+        - results: also stored in self.results
+                   if self.stencil is periodic --> periodic mesh
+                   else                        --> non-periodic mesh
+
+        """
+        method = method.lower()
+        assert method in ("auto", "fast", "full")
+        # TODO: determine the delta / D ratio for fast / full mode
+        # TODO: should also consider phi_c
+        F = self.physics.generate_F(self.stencil)
+        M_origin = self.stencil.generate_mesh()
+        # For periodic stencil,
+        # we need 2 * extra + 1 tiles, where
+        # extra * M_origin.shape[i] > F.shape[i] // 2
+        if self.stencil.is_periodic:
+            # TODO: we just consider 1 direction now
+            extra = math.ceil(F.shape[0] / 2 / M_origin.shape[0])
+            M = M_origin * (2 * extra + 1, 2 * extra + 1)
+        else:
+            M = M_origin
+
+        # TODO: choose between fast and full methods
 
     def simulate_old(self, h):
         """

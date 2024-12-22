@@ -50,6 +50,10 @@ class Mesh:
         self.y_range = y_range
 
     @property
+    def shape(self):
+        return self.array.shape
+
+    @property
     def extent(self):
         """Combine range to extent for matplotlib's imshow"""
         return np.array(
@@ -69,6 +73,59 @@ class Mesh:
         # Perform connected component labeling
         labeled_array, num_features = label(self.array)
         return Mesh(labeled_array, self.x_range, self.y_range), num_features
+
+    def tiled_array(self, extra_x=1, extra_y=None):
+        """
+        Tile the array by (2 * extra_x + 1, 2 * extra_y + 1) times
+        in x- and y-directions, and return the tiled array with
+        indices to trim back.
+
+        Parameters:
+        - extra_x: Number of extra tiles to add in the x-direction on each side.
+        - extra_y: Number of extra tiles to add in the y-direction on each side. If None, extra_y = extra_x.
+
+        Returns:
+        - tiled_array: A periodically tiled array.
+        - trim_indices: Slice indices to recover the original
+                        array from the tiled version.
+        """
+        if extra_y is None:
+            extra_y = extra_x
+
+        tiled_array = np.tile(self.array, (2 * extra_y + 1, 2 * extra_x + 1))
+        rows, cols = self.array.shape
+        trim_indices = (
+            slice(rows * extra_y, rows * (extra_y + 1)),
+            slice(cols * extra_x, cols * (extra_x + 1)),
+        )
+        return tiled_array, trim_indices
+
+    def padded_array(self, pad_x=1, pad_y=None, value=0):
+        """
+        Create a padded array with padding values and
+        return the padded array with indices to trim back.
+
+        Parameters:
+        - pad_x: Padding size in the x-direction.
+        - pad_y: Padding size in the y-direction. If None, pad_y = pad_x.
+
+        Returns:
+        - padded_array: A padded array with constant values
+        - trim_indices: Slice indices to recover the original array
+                        from the padded version, like in tiled_array
+        """
+        if pad_y is None:
+            pad_y = pad_x
+
+        padded_array = np.pad(
+            self.array,
+            ((pad_y, pad_y), (pad_x, pad_x)),
+            mode="constant",
+            constant_values=value,
+        )
+        rows, cols = self.array.shape
+        trim_indices = (slice(pad_y, pad_y + rows), slice(pad_x, pad_x + cols))
+        return padded_array, trim_indices
 
     def __mul__(self, repeat):
         """Allow making a tile of the mesh
@@ -337,7 +394,7 @@ class Geometry:
         return Geometry(patches=combined_patches, cell=new_cell, pbc=self.pbc)
 
     def draw(
-        self, ax=None, repeat=(1, 1), divisions=1000, cmap="gray", show_unit_cell=True
+        self, ax=None, repeat=(1, 1), divisions=256, cmap="gray", show_unit_cell=True
     ):
         """
         Visualize the geometry and unit cell in a quick way
