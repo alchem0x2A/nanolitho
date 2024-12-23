@@ -259,7 +259,7 @@ class Physics:
         if phi_first:
             self.phi, self.theta = trajectory[:, 0], trajectory[:, 1]
         else:
-            self.phi, self.theta = trajectory[:, 1], trajectory[:, 2]
+            self.phi, self.theta = trajectory[:, 1], trajectory[:, 0]
         self.xi = phi_broadening
         self.drift = drift
         self.diffusion = diffusion
@@ -291,6 +291,10 @@ class Physics:
 
         # The max radius of the filter pattern
         R_max = np.max(np.abs(R_center))
+        # Ensure that we have at least some matrix
+        if R_max == 0:
+            R_max = self.diffusion
+        # TODO: make sure F matrix is always odd
         xy_lim = domain_ratio * R_max
         x_range = np.arange(-xy_lim, xy_lim, h)
         y_range = np.arange(-xy_lim, xy_lim, h)
@@ -301,7 +305,8 @@ class Physics:
             bins=[xmesh.shape[0], ymesh.shape[1]],
             range=[[x_range.min(), x_range.max()], [y_range.min(), y_range.max()]],
         )
-        F_mesh = gaussian_filter(F_mesh, sigma=int(self.diffusion / h))
+        sigma = int(self.diffusion / h)
+        F_mesh = gaussian_filter(F_mesh, sigma)
         return Mesh(F_mesh, x_range, y_range)
 
     def draw(self, ax=None, stencil=None, grid="polar", cmap="gray", phi_max=None):
@@ -344,7 +349,7 @@ class Physics:
                 phi_max = phi_max
             ax.scatter(self.theta, np.sin(self.phi), marker="o", label="Trajectory")
 
-            ax.set_theta_zero_location("S")
+            ax.set_theta_zero_location("N")
             ax.set_theta_direction(1)
             rticks_raw = np.linspace(0, phi_max, 5)
             rticks_label_deg = [f"{v:.2f}°" for v in np.degrees(np.arcsin(rticks_raw))]
@@ -402,87 +407,32 @@ class System:
         assert method in ("auto", "fast", "full")
         # TODO: determine the delta / D ratio for fast / full mode
         # TODO: should also consider phi_c
-        F = self.physics.generate_F(self.stencil)
+        F = self.physics.generate_F(self.stencil).array
         M_origin = self.stencil.generate_mesh()
         # For periodic stencil,
         # we need 2 * extra + 1 tiles, where
         # extra * M_origin.shape[i] > F.shape[i] // 2
+        print("F shape", F.shape)
         if self.stencil.is_periodic:
             # TODO: we just consider 1 direction now
             extra = math.ceil(F.shape[0] / 2 / M_origin.shape[0])
-            M = M_origin * (2 * extra + 1, 2 * extra + 1)
+            M, recover_indices = M_origin.tiled_array(extra_x=extra)
         else:
-            M = M_origin
+            pad = F.shape[0] // 2
+            M, recover_indices = M_origin.padded_array(pad=pad)
 
+        # The fast approach
+        # TODO: make sure auto selects
         # TODO: choose between fast and full methods
-
-    def simulate_old(self, h):
-        """
-        Legacy method to use full convolution
-        """
-        # Generate mask and physics matrices
-        # shrink = -self.mask.delta * np.tan(np.deg2rad(self.physics.psi))
-        self.h = h
-        shrink = 0
-        input_matrix, x_range, y_range = self.mask.generate_mesh(h, shrink=shrink)
-        filter_matrix, _, _ = self.physics.generate_filter(
-            h, H=self.mask.H, delta=self.mask.delta
-        )
-
-        print(input_matrix.shape)
-        # Add zero padding to M
-        pad_width = filter_matrix.shape[0] // 2
-        input_padded = np.pad(
-            input_matrix, pad_width=pad_width, mode="constant", constant_values=0
-        )
-
-        # Perform convolution
-        result = fftconvolve(input_padded, filter_matrix, mode="same")
-
-        # Crop the result to the original size
-        result = result[pad_width:-pad_width, pad_width:-pad_width]
-        self.results = (result, x_range, y_range)
+        if method in ("fast", "auto"):
+            print(M.shape, F.shape)
+            print(M.ndim, F.ndim)
+            results_padded = fftconvolve(M, F, mode="same")
+            results = results_padded[recover_indices]
+            self.results = Mesh(results, M_origin.x_range, M_origin.y_range)
+        else:
+            raise NotImplementedError()
         return self.results
-
-    def simulate_unit_cell(self, h):
-        """Only simulate the unit cell result"""
-        self.h = h
-        shrink = 0
-        (M_uc, x_range_uc, y_range_uc) = self.stencil._generate_mesh_unit_cell(
-            h, shrink=shrink
-        )
-        F, _, _ = self.physics.generate_F(
-            h=self.h, D=self.stencil.D, delta=self.mask.delta
-        )
-
-        print(M_uc.shape)
-        # Perform convolution
-        # TODO: make sure if we need larger tiles
-        m, n = M_uc.shape
-        tile_m, tile_n = 3, 3
-        M_tile = np.tile(M_uc, (tile_m, tile_n))
-        conv_results = fftconvolve(M_tile, F, mode="same")
-        # TODO: change if tile isn't 3
-        results_uc = conv_results[m : 2 * m, n : 2 * n]
-
-        # Crop the result to the original size
-        # result = result[pad_width:-pad_width, pad_width:-pad_width]
-        self.results_uc = results_uc
-        self.range_uc = x_range_uc, y_range_uc
-        return
-
-    def simulate(self, h):
-        """New method using repeating unit cell"""
-        self.simulate_unit_cell(h)
-        repeat = self.stencil.repeat
-        # TODO: reset format
-        self.results = (
-            np.tile(self.results_uc, (repeat[1], repeat[0])),
-            # TODO: make sure tile is different from xy
-            self.range_uc[0] * repeat[0],
-            self.range_uc[1] * repeat[1],
-        )
-        return
 
     def save_tiff(self, h, fname):
         """Save the normalized height as a tiff file so that the file can be opened by
