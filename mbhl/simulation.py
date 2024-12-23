@@ -255,8 +255,14 @@ class Stencil:
             unit_ratio = float(dimension_ratio)
 
         for patch in new_geometry.patches:
+            exterior = patch.exterior.xy
+            # print(exterior)
+            (xy,) = (np.array(exterior) / unit_ratio,)
+            # print(xy)
+            # print(xy.shape)
             ax.plot(
-                *patch.exterior.xy / unit_ratio,
+                xy[0],
+                xy[1],
                 "--",
                 color=color,
                 alpha=alpha,
@@ -540,7 +546,7 @@ class System:
                 repeat=(repeat[0] + 1, repeat[1] + 1),
                 dimension_ratio=dimension_ratio,
                 unit=unit,
-                line_width=mask_lw,
+                lw=mask_lw,
                 alpha=mask_alpha,
             )
         return
