@@ -319,7 +319,7 @@ class Physics:
             ("`generate_fileter` is deprecated! " "Use generate_F instead")
         )
 
-    def generate_F(self, stencil, domain_ratio=1.5):
+    def generate_F(self, stencil, domain_ratio=1.5, add_diffusion=True):
         """Generate the offset mesh based on the stencil
 
         The following parameters are determined from the stencil geometry:
@@ -331,6 +331,7 @@ class Physics:
         - stencil: a Stencil object
         - domain_ratio: factor to extend the mesh domain
                         relative to max radius.
+        - add_diffusion: whether to add diffusion kernel on F
         """
 
         # Create the "central" trajectory points
@@ -369,8 +370,9 @@ class Physics:
                 [y_range.min(), y_range.max()],
             ],
         )
-        sigma = int(self.diffusion / h)
-        F_mesh = gaussian_filter(F_mesh, sigma)
+        if add_diffusion:
+            sigma = int(self.diffusion / h)
+            F_mesh = gaussian_filter(F_mesh, sigma)
         return Mesh(F_mesh, x_range, y_range)
 
     def draw(
@@ -468,15 +470,43 @@ class System:
 
         """
         method = method.lower()
-        assert method in ("auto", "fast", "full")
+        assert method in ("auto", "fast", "full", "direct")
         # TODO: determine the delta / D ratio for fast / full mode
         # TODO: should also consider phi_c
-        F = self.physics.generate_F(self.stencil).array
-        M_origin = self.stencil.generate_mesh()
+
+        if method == "auto":
+            # TODO: implement method choose
+            method = "fast"
+
+        if method == "fast":
+            self.simulate_fftconvolve()
+        elif method == "direct":
+            raise NotImplementedError()
+        elif method == "full":
+            self.simulate_raytracing()
+
+        if self.results is None:
+            raise RuntimeError("Simulation does not produce any results!")
+
+    def _prepare_matrices(self, add_diffusion=True):
+        """Prepare the F and M matrices of the system
+
+        Parameters:
+        - add_diffusion: whether to create a smeared F matrix
+
+        Returns:
+        - F: offset trajectory matrix
+        - M: padded stencil matrix
+        - M_origin: original stencil matrix
+        - recover_indices: indices to trim the resulted matrix
+        """
         # For periodic stencil,
         # we need 2 * extra + 1 tiles, where
         # extra * M_origin.shape[i] > F.shape[i] // 2
-        print("F shape", F.shape)
+        F = self.physics.generate_F(
+            self.stencil, add_diffusion=add_diffusion
+        ).array
+        M_origin = self.stencil.generate_mesh()
         if self.stencil.is_periodic:
             # TODO: we just consider 1 direction now
             extra = math.ceil(F.shape[0] / 2 / M_origin.shape[0])
@@ -484,19 +514,83 @@ class System:
         else:
             pad = F.shape[0] // 2
             M, recover_indices = M_origin.padded_array(pad=pad)
+        return F, M, M_origin, recover_indices
 
-        # The fast approach
-        # TODO: make sure auto selects
-        # TODO: choose between fast and full methods
-        if method in ("fast", "auto"):
-            print(M.shape, F.shape)
-            print(M.ndim, F.ndim)
-            results_padded = fftconvolve(M, F, mode="same")
-            results = results_padded[recover_indices]
-            self.results = Mesh(results, M_origin.x_range, M_origin.y_range)
-        else:
-            raise NotImplementedError()
-        return self.results
+    def simulate_fftconvolve(self):
+        """Use the fftconvolve method to calculate
+        the convolution between M and F.
+
+        This method ignores the finite thickness of membrane, but
+        is very efficient for calculation trajectories of small phi
+        angles
+        """
+        F, M, M_origin, recover_indices = self._prepare_matrices(
+            add_diffusion=True
+        )
+        results_padded = fftconvolve(M, F, mode="same")
+        results = results_padded[recover_indices]
+        self.results = Mesh(results, M_origin.x_range, M_origin.y_range)
+        return
+
+    def simulate_raytracing(self):
+        """Use the ray tracing equation to calculate
+        the contributions at each pixel on the substrate
+
+        This method is considerably slower than `simulate_fftconvolve`
+        but considers the finite thickness of the membrane
+        """
+        from scipy.ndimage import label
+
+        (F, M, M_origin, recover_indices) = self._prepare_matrices(
+            add_diffusion=False
+        )
+        # L, _ = M.to_label()     # label matrix of M
+        L, _ = label(M)
+        h, D, delta = self.stencil.h, self.stencil.D, self.stencil.delta
+        R_s = self.physics.drift
+        # For the simulate_raytracing to be efficient, we
+        # take the fact that non-zero points in F are sparse
+        # In this case F should not be gaussian-blurred
+        # [(i, j), ...] indices where F.array is non-zero
+        F_nz_indices = np.argwhere(F > 0)
+        F_center = np.array(F.shape) // 2  # center where (x, y) == 0
+        F_nz_shifts = F_nz_indices - F_center
+        R_nz = np.sqrt(
+            (F_nz_shifts[:, 0] * h) ** 2 + (F_nz_shifts[:, 1] * h) ** 2
+        )
+        R_nz_bottom = R_s + (R_nz - R_s) * D / (delta + D)
+        F_bottom_nz_shifts = np.round(
+            (R_nz_bottom / R_nz)[:, None] * F_nz_shifts
+        ).astype(int)
+
+        results = np.zeros_like(M, dtype=float)
+        # Index matrices
+        I_i, I_j = np.meshgrid(
+            np.arange(M.shape[0]), np.arange(M.shape[1])  # Columns  # Rows
+        )
+        for (f_shift, f_bottom_shift, f_value) in zip(
+            F_nz_shifts,
+            F_bottom_nz_shifts,
+            F[F_nz_indices[:, 0], F_nz_indices[:, 1]],
+        ):
+
+            # Retrieve mask and label values
+            mask_T = np.roll(M, f_shift, axis=(0, 1))
+            mask_B = np.roll(M, f_bottom_shift, axis=(0, 1))
+            label_T = np.roll(L, f_shift, axis=(0, 1))
+            label_B = np.roll(L, f_bottom_shift, axis=(0, 1))
+
+            # Apply shadowing condition (labels must match)
+            shadowing_condition = (label_T == label_B).astype(float)
+
+            # Update the results matrix
+            results += f_value * mask_T * mask_B * shadowing_condition
+
+        results_recovered = results[recover_indices]
+        sigma = self.physics.diffusion / h
+        results_blurred = gaussian_filter(results_recovered, sigma=sigma)
+        self.results = Mesh(results_blurred, M_origin.x_range, M_origin.y_range)
+        return
 
     def save_tiff(self, h, fname):
         """Save the normalized height as a tiff file so that the file can be opened by
