@@ -231,7 +231,14 @@ class Stencil:
         return ax, cm
 
     def draw_stencil_patch_boundaries(
-        self, ax=None, repeat=(1, 1), unit="um", color="white"
+        self,
+        ax=None,
+        repeat=(1, 1),
+        unit="um",
+        dimension_ratio=None,
+        color="white",
+        lw=1,
+        alpha=1.0,
     ):
         """Plot the patch boundaries in the stencil using Shapely
         Parameters:
@@ -242,10 +249,19 @@ class Stencil:
         """
         ax = ensure_ax(ax)
         new_geometry = self.geometry * repeat
-        unit_ratio = unit_properties[unit]["ratio"]
+        if dimension_ratio is None:
+            unit_ratio = unit_properties[unit]["ratio"]
+        else:
+            unit_ratio = float(dimension_ratio)
 
         for patch in new_geometry.patches:
-            ax.plot(*patch.exterior.xy / unit_ratio, "--", color=color)
+            ax.plot(
+                *patch.exterior.xy / unit_ratio,
+                "--",
+                color=color,
+                alpha=alpha,
+                linewidth=lw,
+            )
         return ax
 
 
@@ -356,6 +372,10 @@ class Physics:
     ):
         """Draw the offset trajectory pattern on polar or cartesian grids
 
+        Drawing on cartesian grids isn't always clearly visible if the domain
+        is very large, we recommend using the polar grid for
+        better visualization results
+
         Parameters:
         - ax: matplotlib figure axis
         - stencil: a Stencil object for plotting on the cartesian grid
@@ -369,22 +389,16 @@ class Physics:
             "polar",
             "cartesian",
         ), "`grid` can either be 'polar' or 'cartesian'"
-        if ax is None:
-            import matplotlib.pyplot as plt
-
-            if grid == "polar":
-                fig, ax = plt.subplots(subplot_kw={"projection": "polar"})
-            else:
-                fig, ax = plt.subplots()
 
         if grid == "polar":
-            if not isinstance(ax, PolarAxes):
+            if (ax is not None) and not isinstance(ax, PolarAxes):
                 raise ValueError(
                     (
                         "The provided axis must have a "
                         "polar projection for 'polar' grid."
                     )
                 )
+            ax = ensure_ax(ax, subplot_kw={"projection": "polar"})
 
             # Plot trajectory in polar coordinates
             if phi_max is None:
@@ -406,7 +420,7 @@ class Physics:
             ax.set_xlabel(r"$\theta$")
             ax.set_ylabel(r"$\phi$")
 
-        elif grid == "cartesian":
+        else:
             # Cartesian grid: Generate and plot the filter
             if stencil is None:
                 raise ValueError(
@@ -416,14 +430,7 @@ class Physics:
                     )
                 )
             mesh = self.generate_F(stencil)
-            ax.imshow(
-                mesh.mask,
-                extent=mesh.extent / um,
-                origin="lower",
-                cmap=cmap,
-            )
-            ax.set_xlabel("X (μm)")
-            ax.set_ylabel("Y (μm)")
+            ax, cm = mesh.draw(ax=ax)
         return ax
 
 
@@ -498,59 +505,42 @@ class System:
 
     def draw(
         self,
-        ax,
+        ax=None,
         cmap="viridis",
+        unit="um",
+        repeat=(1, 1),
         show_mask=True,
         mask_lw=1.5,
         mask_alpha=0.5,
         dimension_ratio=None,
-        xlim=None,
-        ylim=None,
+        domain=None,
         alpha=1.0,
         vmax=None,
     ):
         """Draw the system simulation results as 2D map"""
+        # TODO: make sure lazy evaluation of the results
         if self.results is None:
             raise RuntimeError("Please finish simulation first!")
 
-        prob, x_range, y_range = self.results
-        if not dimension_ratio:
-            extent = (
-                x_range[0] / um,
-                x_range[-1] / um,
-                y_range[0] / um,
-                y_range[-1] / um,
-            )
-        else:
-            extent = (
-                x_range[0] / dimension_ratio,
-                x_range[-1] / dimension_ratio,
-                y_range[0] / dimension_ratio,
-                y_range[-1] / dimension_ratio,
-            )
-        ax.imshow(prob, extent=extent, cmap=cmap, alpha=alpha, vmax=vmax)
+        ax, cm = self.results.draw(
+            ax=ax,
+            repeat=repeat,
+            unit=unit,
+            domain=domain,
+            dimension_ratio=dimension_ratio,
+            cmap=cmap,
+            vmax=vmax,
+            alpha=alpha,
+        )
 
+        # Use the stencil
         if show_mask:
-            mask_bin, x_mask, y_mask = self.mask.generate_mesh(h=self.h / 2)
-            edge_x, edge_y = sobel(mask_bin, axis=0), sobel(mask_bin, axis=1)
-            edges = np.hypot(edge_x, edge_y)
-            edges[edges > 0] = 1
-            radius = math.ceil(mask_lw)
-            # edges = binary_dilation(edges, structure=np.ones((radius, radius)))
-            rgba_edges = np.zeros((edges.shape[0], edges.shape[1], 4))
-            rgba_edges[..., :3] = 1  # Set R, G, B to 1 (white)
-            rgba_edges[..., 3] = edges * mask_alpha
-            ax.imshow(rgba_edges, extent=extent)
-        if not dimension_ratio:
-            ax.set_xlabel("X (μm)")
-            ax.set_ylabel("Y (μm)")
-        else:
-            ax.set_xlabel("X (a.u.)")
-            ax.set_ylabel("Y (a.u.)")
-
-        if xlim is not None:
-            ax.set_xlim(*xlim)
-
-        if ylim is not None:
-            ax.set_ylim(*ylim)
+            ax = self.stencil.draw_stencil_patch_boundaries(
+                ax=ax,
+                repeat=(repeat[0] + 1, repeat[1] + 1),
+                dimension_ratio=dimension_ratio,
+                unit=unit,
+                line_width=mask_lw,
+                alpha=mask_alpha,
+            )
         return

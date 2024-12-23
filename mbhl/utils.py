@@ -17,12 +17,12 @@ unit_properties = {
 }
 
 
-def ensure_ax(ax=None):
+def ensure_ax(ax=None, subplot_kw={}):
     """Ensure one Axes object exists"""
     if ax is None:
         import matplotlib.pyplot as plt
 
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(subplot_kw=subplot_kw)
     return ax
 
 

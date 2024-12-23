@@ -173,6 +173,7 @@ class Mesh:
         ax=None,
         repeat=(1, 1),
         unit="um",
+        dimension_ratio=None,
         domain=None,
         cmap="gray",
         **argv,
@@ -185,6 +186,7 @@ class Mesh:
               If not provided, create one on-the-fly
         - repeat: repeat in x- and y-directions
         - unit: unit to plot on axis, can be 'nm', 'um' or 'mm'
+        - dimension_ratio: if not None, explicitly set the ratio for axis
         - domain: None of a 4-tuple (x_min, x_max, y_min, y_max)
         - cmap: color map name
         - argv: extra parameters to provide to ax.imshow
@@ -194,10 +196,16 @@ class Mesh:
         - cm: 2D plot
         """
         ax = ensure_ax(ax)
-        unit = unit.lower()
-        assert unit in unit_properties.keys(), f"unit name {unit} is unknown!"
-        axis_ratio = unit_properties[unit]["ratio"]
-        unit_display_name = unit_properties[unit]["display_name"]
+        if dimension_ratio is None:
+            unit = unit.lower()
+            assert (
+                unit in unit_properties.keys()
+            ), f"unit name {unit} is unknown!"
+            axis_ratio = unit_properties[unit]["ratio"]
+            unit_display_name = unit_properties[unit]["display_name"]
+        else:
+            axis_ratio = float(dimension_ratio)
+            unit_display_name = "a.u."
 
         mesh_draw = self * repeat
         cm = ax.imshow(
