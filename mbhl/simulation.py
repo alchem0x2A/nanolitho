@@ -325,10 +325,18 @@ class Physics:
         # Ensure that we have at least some matrix
         if R_max == 0:
             R_max = self.diffusion
-        # TODO: make sure F matrix is always odd
+
+        # Ensuring both x_range, y_range are of odd lengths
+        # and centered at 0
         xy_lim = domain_ratio * R_max
-        x_range = np.arange(-xy_lim, xy_lim, h)
-        y_range = np.arange(-xy_lim, xy_lim, h)
+        n_points = int(np.ceil(2 * xy_lim / h))  # Total number of points
+        if n_points % 2 == 0:
+            n_points += 1  # Make sure the number of points is odd
+
+        half_range = (n_points // 2) * h
+        x_range = np.linspace(-half_range, half_range, n_points)
+        y_range = np.linspace(-half_range, half_range, n_points)
+
         xmesh, ymesh = np.meshgrid(x_range, y_range)
         F_mesh, _, _ = np.histogram2d(
             x_center,
