@@ -17,6 +17,15 @@ unit_properties = {
 }
 
 
+def ensure_ax(ax=None):
+    """Ensure one Axes object exists"""
+    if ax is None:
+        import matplotlib.pyplot as plt
+
+        fig, ax = plt.subplots()
+    return ax
+
+
 def sanitize_rL_input(r=None, L=None, diameter=None, spacing=None):
     """Sanitize the r-L or diameter-spacing inputs for Geometry"""
     if (diameter is not None and spacing is not None) and (

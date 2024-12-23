@@ -13,7 +13,7 @@ from shapely.ops import unary_union
 from shapely.vectorized import contains
 
 from .geometry import Geometry, Mesh
-from .utils import deprecated, nm, um
+from .utils import deprecated, ensure_ax, nm, um, unit_properties
 
 
 class Stencil:
@@ -205,26 +205,48 @@ class Stencil:
     def is_periodic(self):
         return self.geometry.is_periodic
 
-    def draw(self, ax, h=10 * nm, cmap="gray", vmax=None):
-        """Draw the mask pattern with existing repeats
-        ax is an existing matplotlib axis
+    def draw(
+        self,
+        ax=None,
+        repeat=(1, 1),
+        divisions=256,
+        cmap="gray",
+        unit="um",
+        show_unit_cell=True,
+        unit_cell_color="orange",
+    ):
+        """Draw the stencil mask using Geometry.draw
+
+        See Geometry.draw for more details
         """
-        # TODO: make sure ax is there!
-        bin_mask, x_range, y_range = self.generate_mesh()
-        ax.imshow(
-            bin_mask,
-            extent=(
-                x_range[0] / um,
-                x_range[-1] / um,
-                y_range[0] / um,
-                y_range[-1] / um,
-            ),
-            vmax=vmax,
+        ax, cm = self.geometry.draw(
+            ax=ax,
+            repeat=repeat,
+            divisions=divisions,
             cmap=cmap,
+            unit=unit,
+            show_unit_cell=show_unit_cell,
+            unit_cell_color=unit_cell_color,
         )
-        ax.set_xlabel("X (μm)")
-        ax.set_ylabel("Y (μm)")
-        return
+        return ax, cm
+
+    def draw_stencil_patch_boundaries(
+        self, ax=None, repeat=(1, 1), unit="um", color="white"
+    ):
+        """Plot the patch boundaries in the stencil using Shapely
+        Parameters:
+        - ax: matplotlib Axes object
+        - repeat: repeat in x- and y-directions
+        - unit: the unit to draw on axes, one of 'nm', 'um' or 'mm'
+        - color: line color of the patch
+        """
+        ax = ensure_ax(ax)
+        new_geometry = self.geometry * repeat
+        unit_ratio = unit_properties[unit]["ratio"]
+
+        for patch in new_geometry.patches:
+            ax.plot(*patch.exterior.xy / unit_ratio, "--", color=color)
+        return ax
 
 
 @deprecated(("Please use `Stencil` as the class name " "instead of `Mask`"))

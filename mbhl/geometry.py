@@ -5,7 +5,7 @@ from shapely.geometry import Point, Polygon, box
 from shapely.ops import unary_union
 from shapely.vectorized import contains
 
-from .utils import mm, nm, sqrt2, sqrt3, um, unit_properties
+from .utils import ensure_ax, mm, nm, sqrt2, sqrt3, um, unit_properties
 
 # Definition of geometries
 
@@ -193,14 +193,12 @@ class Mesh:
         - ax: Axes with plot
         - cm: 2D plot
         """
+        ax = ensure_ax(ax)
         unit = unit.lower()
         assert unit in unit_properties.keys(), f"unit name {unit} is unknown!"
         axis_ratio = unit_properties[unit]["ratio"]
         unit_display_name = unit_properties[unit]["display_name"]
-        if ax is None:
-            import matplotlib.pyplot as plt
 
-            fig, ax = plt.subplots()
         mesh_draw = self * repeat
         cm = ax.imshow(
             mesh_draw.array,
