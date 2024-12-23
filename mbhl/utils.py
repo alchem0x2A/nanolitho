@@ -13,6 +13,18 @@ sqrt3 = math.sqrt(3)
 sqrt2 = math.sqrt(2)
 
 
+def _sanitize_rL_input(r=None, L=None, diameter=None, spacing=None):
+    """Sanitize the r-L or diameter-spacing inputs for Geometry"""
+    if (diameter is not None and spacing is not None) and (r is None and L is None):
+        r = diameter / 2
+        L = spacing - diameter
+    elif (r is not None and L is not None) and (diameter is None and spacing is None):
+        pass
+    else:
+        raise ValueError("Provide either (r, L) or (diameter, spacing), but not both.")
+    return r, L
+
+
 def deprecated(message):
     def decorator(obj):
         @functools.wraps(obj)
