@@ -97,7 +97,9 @@ class Stencil:
         """Generate mesh from geometry."""
         return self.geometry.generate_mesh(self.h)
 
-    def calculate_critical_phi(self, theta=0, r_search_interval=5):
+    def calculate_critical_phi(
+        self, theta=0, r_search_interval=5, degrees=False
+    ):
         """
         Calculate the matrix of critical
         phi at angle theta (counted from the +y axis).
@@ -118,6 +120,7 @@ class Stencil:
                              incidence line.
                              Increase this value will make computation faster,
                              but more rasterized results
+        - degrees: if True, return phi_c values in degrees, otherwise in radians
 
         Returns:
         - Phic_mesh: mesh object with the same dimension as
@@ -164,7 +167,8 @@ class Stencil:
             shift_x_pixels = int(R_pixels * sin_theta)
             shift_y_pixels = -int(R_pixels * cos_theta)
             R = np.sqrt(
-                (shift_x_pixels * dx_real) ** 2 + (shift_y_pixels * dy_real) ** 2
+                (shift_x_pixels * dx_real) ** 2
+                + (shift_y_pixels * dy_real) ** 2
             )
 
             new_x_pixels = np.clip(
@@ -181,6 +185,8 @@ class Stencil:
         Rm_trimmed = Rm_array[trim_indices]
 
         phic_array = np.arctan(Rm_trimmed / delta)
+        if degrees:
+            phic_array = np.degrees(phic_array)
 
         Phic_mesh = Mesh(
             array=phic_array, x_range=M_origin.x_range, y_range=M_origin.y_range
@@ -287,7 +293,10 @@ class Physics:
         h, D, delta = stencil.h, stencil.D, stencil.delta
         phi, theta = self.phi, self.theta
         R_center = (D + delta) * np.tan(phi) + self.drift
-        x_center, y_center = (R_center * np.cos(theta), R_center * np.sin(theta))
+        x_center, y_center = (
+            R_center * np.cos(theta),
+            R_center * np.sin(theta),
+        )
 
         # The max radius of the filter pattern
         R_max = np.max(np.abs(R_center))
@@ -303,13 +312,18 @@ class Physics:
             x_center,
             y_center,
             bins=[xmesh.shape[0], ymesh.shape[1]],
-            range=[[x_range.min(), x_range.max()], [y_range.min(), y_range.max()]],
+            range=[
+                [x_range.min(), x_range.max()],
+                [y_range.min(), y_range.max()],
+            ],
         )
         sigma = int(self.diffusion / h)
         F_mesh = gaussian_filter(F_mesh, sigma)
         return Mesh(F_mesh, x_range, y_range)
 
-    def draw(self, ax=None, stencil=None, grid="polar", cmap="gray", phi_max=None):
+    def draw(
+        self, ax=None, stencil=None, grid="polar", cmap="gray", phi_max=None
+    ):
         """Draw the offset trajectory pattern on polar or cartesian grids
 
         Parameters:
@@ -347,12 +361,16 @@ class Physics:
                 phi_max = min(np.pi / 2, 1.5 * np.max(self.phi))
             else:
                 phi_max = phi_max
-            ax.scatter(self.theta, np.sin(self.phi), marker="o", label="Trajectory")
+            ax.scatter(
+                self.theta, np.sin(self.phi), marker="o", label="Trajectory"
+            )
 
             ax.set_theta_zero_location("N")
             ax.set_theta_direction(1)
             rticks_raw = np.linspace(0, phi_max, 5)
-            rticks_label_deg = [f"{v:.2f}°" for v in np.degrees(np.arcsin(rticks_raw))]
+            rticks_label_deg = [
+                f"{v:.2f}°" for v in np.degrees(np.arcsin(rticks_raw))
+            ]
             ax.set_rmax(np.sin(phi_max))
             ax.set_rticks(rticks_raw, labels=rticks_label_deg)
             ax.set_xlabel(r"$\theta$")
@@ -362,7 +380,10 @@ class Physics:
             # Cartesian grid: Generate and plot the filter
             if stencil is None:
                 raise ValueError(
-                    ("No stencil provided to generate " "a cartesian projection!")
+                    (
+                        "No stencil provided to generate "
+                        "a cartesian projection!"
+                    )
                 )
             mesh = self.generate_F(stencil)
             ax.imshow(

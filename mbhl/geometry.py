@@ -5,7 +5,7 @@ from shapely.geometry import Point, Polygon, box
 from shapely.ops import unary_union
 from shapely.vectorized import contains
 
-from .utils import nm, sqrt2, sqrt3, um
+from .utils import mm, nm, sqrt2, sqrt3, um
 
 # Definition of geometries
 
@@ -57,7 +57,12 @@ class Mesh:
     def extent(self):
         """Combine range to extent for matplotlib's imshow"""
         return np.array(
-            [self.x_range[0], self.x_range[-1], self.y_range[0], self.y_range[-1]]
+            [
+                self.x_range[0],
+                self.x_range[-1],
+                self.y_range[0],
+                self.y_range[-1],
+            ]
         )
 
     def to_label(self):
@@ -135,7 +140,9 @@ class Mesh:
                 (the array shape will be swapped)
         """
         if not isinstance(repeat, (tuple, list)) or len(repeat) != 2:
-            raise ValueError("Repeat must be a tuple or list of two integers (nx, ny).")
+            raise ValueError(
+                "Repeat must be a tuple or list of two integers (nx, ny)."
+            )
 
         nx, ny = repeat
         # Extend the ranges
@@ -157,6 +164,56 @@ class Mesh:
 
         tiled_array = np.tile(self.array, (ny, nx))
         return Mesh(tiled_array, new_x_range, new_y_range)
+
+    def draw(
+        self,
+        ax=None,
+        repeat=(1, 1),
+        unit="um",
+        domain=None,
+        cmap="grey",
+        **argv,
+    ):
+        """Create a 2D plot of the mesh array,
+        with possibility of repeating
+
+        Parameters:
+        - ax: matplotlib Axes instance.
+              If not provided, create one on-the-fly
+        - repeat: repeat in x- and y-directions
+        - unit: unit to plot on axis, can be 'nm', 'um' or 'mm'
+        - domain: None of a 4-tuple (x_min, x_max, y_min, y_max)
+        - cmap: color map name
+        - argv: extra parameters to provide to ax.imshow
+
+        Returns:
+        - ax: Axes with plot
+        - cm: 2D plot
+        """
+        unit = unit.lower()
+        assert unit in ("nm", "um", "mm"), "unit must be one of nm, um or mm!"
+        axis_ratio_dict = {"nm": nm, "um": um, "mm": mm}
+        axis_ratio = axis_ratio_dict[unit]
+        unit_display_name = unit if unit != "um" else "μm"
+        if ax is None:
+            import matplotlib.pyplot as plt
+
+            fig, ax = plt.subplots()
+        mesh_draw = self * repeat
+        cm = ax.imshow(
+            mesh_draw.array,
+            extent=mesh_draw.extent / axis_ratio,
+            origin="lower",
+            cmap=cmap,
+            **argv,
+        )
+        if domain:
+            xy_lims = np.array(domain) / axis_ratio
+            ax.set_xlim(xy_lims[0], xy_lims[1])
+            ax.set_ylim(xy_lims[2], xy_lims[3])
+        ax.set_xlabel(f"X ({unit_display_name})")
+        ax.set_ylabel(f"Y ({unit_display_name})")
+        return ax, cm
 
 
 class Geometry:
@@ -205,7 +262,9 @@ class Geometry:
         if value.shape != (2,):
             raise ValueError("PBC must be a tuple of two booleans.")
         if value[0] != value[1]:
-            raise NotImplementedError("Mixed boundary conditions are not supported.")
+            raise NotImplementedError(
+                "Mixed boundary conditions are not supported."
+            )
         self._pbc = value
 
     @property
@@ -232,7 +291,9 @@ class Geometry:
         """The shapely union object containing all patches in
         the geometry
         """
-        union = unary_union([patch.buffer(-self.shrink) for patch in self.patches])
+        union = unary_union(
+            [patch.buffer(-self.shrink) for patch in self.patches]
+        )
         return union
 
     def translate(self, displacement):
@@ -251,7 +312,10 @@ class Geometry:
         Returns:
         - None, the patches are translated in-place
         """
-        if not isinstance(displacement, (tuple, list)) or len(displacement) != 2:
+        if (
+            not isinstance(displacement, (tuple, list))
+            or len(displacement) != 2
+        ):
             raise ValueError("Displacement must be a tuple (dx, dy).")
 
         dx, dy = displacement
@@ -300,7 +364,9 @@ class Geometry:
         tiles = self.make_tiles(repeat=(rep, rep))
         union = tiles.union
         # bounds for the tiled union
-        bounds = union.bounds() if not tiles.is_periodic else (0, 0, *tiles.cell)
+        bounds = (
+            union.bounds() if not tiles.is_periodic else (0, 0, *tiles.cell)
+        )
         # Width for the tile, considering the repetition
         # bounds: (xmin, ymin, xmax, ymax)
         tile_w, tile_h = bounds[2] - bounds[0], bounds[3] - bounds[1]
@@ -362,7 +428,9 @@ class Geometry:
             for patch in self.patches
         ]
         new_cell = self.cell * repeat
-        return Geometry(patches=replicated_patches, cell=new_cell, pbc=(True, True))
+        return Geometry(
+            patches=replicated_patches, cell=new_cell, pbc=(True, True)
+        )
 
     def __mul__(self, repeat):
         """
@@ -387,14 +455,21 @@ class Geometry:
             raise ValueError("Cannot combine geometries with different PBCs.")
 
         if self.is_periodic and not np.all(np.isclose(self.cell, other.cell)):
-            raise ValueError("Cannot combine periodic geometries with different cells.")
+            raise ValueError(
+                "Cannot combine periodic geometries with different cells."
+            )
 
         combined_patches = self.patches + other.patches
         new_cell = self.cell if self.is_periodic else (0.0, 0.0)
         return Geometry(patches=combined_patches, cell=new_cell, pbc=self.pbc)
 
     def draw(
-        self, ax=None, repeat=(1, 1), divisions=256, cmap="gray", show_unit_cell=True
+        self,
+        ax=None,
+        repeat=(1, 1),
+        divisions=256,
+        cmap="gray",
+        show_unit_cell=True,
     ):
         """
         Visualize the geometry and unit cell in a quick way

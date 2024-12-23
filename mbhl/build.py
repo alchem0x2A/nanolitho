@@ -1,6 +1,7 @@
 """A collection of functions that build common
 Geometry and trajectory patterns for simulations
 """
+import numpy as np
 
 from .geometry import Circle, Geometry, Rectangle
 from .utils import _sanitize_rL_input, sqrt2, sqrt3
@@ -175,7 +176,9 @@ def diamond_hole_lattice(r=None, L=None, diameter=None, spacing=None):
     return Geometry(patches=patches, cell=cell, pbc=(True, True))
 
 
-def line_lattice(s1, s2, orientation="horizontal", length_ratio_nonperiodic=1.0):
+def line_lattice(
+    s1, s2, orientation="horizontal", length_ratio_nonperiodic=1.0
+):
     """Create a line (slit) array from slit width
     s1 and edge-to-edeg spacing s2
 
@@ -205,3 +208,24 @@ def line_lattice(s1, s2, orientation="horizontal", length_ratio_nonperiodic=1.0)
         patches = [Rectangle(0, W / 2 - s1 / 2, H, s1)]
         cell = (H, W)
     return Geometry(patches=patches, cell=cell, pbc=(True, True))
+
+
+def n_beam_trajectory(phi, theta_0=0, n_pts=360):
+    """Create a trajectory of n-beam interference with
+    constant zenith angle phi, and evenly-distributed azimuthal
+    angles, starting from theta_0 with step of pi/n_pts. The default
+    setting represents a circular trajectory along latitude pi-phi
+
+    Parameters:
+    - phi: zenith angle
+    - theta_0: initial azimuthal angle
+    - n_pts: points along the trajectory
+
+    Returns:
+    - trajectory: np.array of [(theta, phi), ] in radians
+    """
+    theta = np.linspace(theta_0, theta_0 + 2 * np.pi, n_pts, endpoint=False)
+
+    # Create the trajectory with constant phi
+    trajectory = np.array([(theta_i, phi) for theta_i in theta])
+    return trajectory
