@@ -199,7 +199,7 @@ class Stencil:
 
     @property
     def cell(self):
-        return self.geometry.patches
+        return self.geometry.cell
 
     @property
     def is_periodic(self):
@@ -319,7 +319,58 @@ class Physics:
             ("`generate_fileter` is deprecated! " "Use generate_F instead")
         )
 
-    def generate_F(self, stencil, domain_ratio=1.5, add_diffusion=True):
+    def generate_F_fold(self, stencil, domain_ratio=1.5, add_diffusion=True):
+        """Generate offset trajectory F matrix that is folded back
+        to the first periodic zone
+
+        This is intended for testing only.
+        Do not use this method for actual calculations,
+        as `fold_to_bz=True` in generate_F_fold is much more reliable
+
+        This ensures that the dimension of F is the same as stencil
+        """
+        if not stencil.is_periodic:
+            raise ValueError(
+                "generate_F_fold only works with periodic stencil!"
+            )
+        F_mesh = self.generate_F(
+            stencil,
+            domain_ratio=domain_ratio,
+            add_diffusion=add_diffusion,
+            fold_to_bz=False,
+        )
+        cell_w, cell_h = stencil.cell
+        h = stencil.h
+        n_x = int(np.round(cell_w / h))
+        n_y = int(np.round(cell_h / h))
+
+        # Ensure odd dimensions for compatibility with centered F
+        if n_x % 2 == 0:
+            n_x += 1
+        if n_y % 2 == 0:
+            n_y += 1
+
+        center_i_F = F_mesh.array.shape[0] // 2
+        center_j_F = F_mesh.array.shape[1] // 2
+        center_i_fold = n_y // 2
+        center_j_fold = n_x // 2
+
+        folded_F = np.zeros((n_y, n_x), dtype=float)
+        for i in range(F_mesh.array.shape[0]):
+            for j in range(F_mesh.array.shape[1]):
+                # Compute periodic indices relative to the center of the unit cell
+                i_fold = (i - center_i_F + center_i_fold) % n_y
+                j_fold = (j - center_j_F + center_j_fold) % n_x
+                # print(i_fold, j_fold)
+                folded_F[i_fold, j_fold] += F_mesh.array[i, j]
+
+        x_range = np.linspace(-n_x * h / 2, n_x * h / 2, n_x)
+        y_range = np.linspace(-n_y * h / 2, n_y * h / 2, n_y)
+        return Mesh(folded_F, x_range, y_range)
+
+    def generate_F(
+        self, stencil, domain_ratio=1.5, add_diffusion=True, fold_to_bz=False
+    ):
         """Generate the offset mesh based on the stencil
 
         The following parameters are determined from the stencil geometry:
@@ -332,6 +383,7 @@ class Physics:
         - domain_ratio: factor to extend the mesh domain
                         relative to max radius.
         - add_diffusion: whether to add diffusion kernel on F
+        - fold_to_bz: fold to 1st Brillouin zone
         """
 
         # Create the "central" trajectory points
@@ -343,33 +395,59 @@ class Physics:
             R_center * np.sin(theta),
         )
 
-        # The max radius of the filter pattern
-        R_max = np.max(np.abs(R_center))
-        # Ensure that we have at least some matrix
-        if R_max == 0:
-            R_max = self.diffusion
+        if fold_to_bz:
+            if not stencil.is_periodic:
+                raise ValueError("fold_to_bz requires a periodic stencil!")
+            cell_w, cell_h = stencil.cell
+            n_x = int(np.round(cell_w / h))
+            n_y = int(np.round(cell_h / h))
 
-        # Ensuring both x_range, y_range are of odd lengths
-        # and centered at 0
-        xy_lim = domain_ratio * R_max
-        n_points = int(np.ceil(2 * xy_lim / h))  # Total number of points
-        if n_points % 2 == 0:
-            n_points += 1  # Make sure the number of points is odd
+            # Ensure odd dimensions for compatibility with centered folding
+            if n_x % 2 == 0:
+                n_x += 1
+            if n_y % 2 == 0:
+                n_y += 1
 
-        half_range = (n_points // 2) * h
-        x_range = np.linspace(-half_range, half_range, n_points)
-        y_range = np.linspace(-half_range, half_range, n_points)
+            x_range = np.linspace(-n_x * h / 2, n_x * h / 2, n_x)
+            y_range = np.linspace(-n_y * h / 2, n_y * h / 2, n_y)
+        else:
+            # The max radius of the filter pattern
+            R_max = np.max(np.abs(R_center))
+            # Ensure that we have at least some matrix
+            if R_max == 0:
+                R_max = self.diffusion
+            xy_lim = domain_ratio * R_max
+            n_points = int(np.ceil(2 * xy_lim / h))  # Total number of points
+            if n_points % 2 == 0:
+                n_points += 1  # Make sure the number of points is odd
+            half_range = (n_points // 2) * h
+            x_range = np.linspace(-half_range, half_range, n_points)
+            y_range = np.linspace(-half_range, half_range, n_points)
 
         xmesh, ymesh = np.meshgrid(x_range, y_range)
-        F_mesh, _, _ = np.histogram2d(
-            x_center,
-            y_center,
-            bins=[xmesh.shape[0], ymesh.shape[1]],
-            range=[
-                [x_range.min(), x_range.max()],
-                [y_range.min(), y_range.max()],
-            ],
-        )
+        if fold_to_bz:
+            # Folding the offsets back to the first BZ
+            folded_offsets_x = (x_center + cell_w / 2) % cell_w - cell_w / 2
+            folded_offsets_y = (y_center + cell_h / 2) % cell_h - cell_h / 2
+            F_mesh, _, _ = np.histogram2d(
+                folded_offsets_x,
+                folded_offsets_y,
+                bins=[n_x, n_y],
+                range=[
+                    [x_range.min(), x_range.max()],
+                    [y_range.min(), y_range.max()],
+                ],
+            )
+        else:
+            F_mesh, _, _ = np.histogram2d(
+                x_center,
+                y_center,
+                bins=[xmesh.shape[0], ymesh.shape[1]],
+                range=[
+                    [x_range.min(), x_range.max()],
+                    [y_range.min(), y_range.max()],
+                ],
+            )
         if add_diffusion:
             sigma = int(self.diffusion / h)
             F_mesh = gaussian_filter(F_mesh, sigma)
@@ -452,7 +530,7 @@ class System:
     def h(self):
         return self.stencil.h
 
-    def simulate(self, method="auto"):
+    def simulate(self, method="auto", fold_to_bz=True):
         """Simulate the convolution between stencil and physics
 
         There are several methods to perform the convolution operation
@@ -470,7 +548,7 @@ class System:
 
         """
         method = method.lower()
-        assert method in ("auto", "fast", "full", "direct")
+        assert method in ("auto", "fft", "raytracing", "direct")
         # TODO: determine the delta / D ratio for fast / full mode
         # TODO: should also consider phi_c
 
@@ -478,17 +556,17 @@ class System:
             # TODO: implement method choose
             method = "fast"
 
-        if method == "fast":
-            self.simulate_fftconvolve()
+        if method == "fft":
+            self.simulate_fftconvolve(fold_to_bz=fold_to_bz)
         elif method == "direct":
             raise NotImplementedError()
-        elif method == "full":
-            self.simulate_raytracing()
+        elif method == "raytracing":
+            self.simulate_raytracing(fold_to_bz=fold_to_bz)
 
         if self.results is None:
             raise RuntimeError("Simulation does not produce any results!")
 
-    def _prepare_matrices(self, add_diffusion=True):
+    def _prepare_matrices(self, add_diffusion=True, fold_to_bz=True):
         """Prepare the F and M matrices of the system
 
         Parameters:
@@ -503,20 +581,34 @@ class System:
         # For periodic stencil,
         # we need 2 * extra + 1 tiles, where
         # extra * M_origin.shape[i] > F.shape[i] // 2
-        F = self.physics.generate_F(
-            self.stencil, add_diffusion=add_diffusion
-        ).array
-        M_origin = self.stencil.generate_mesh()
+        #
+        # When using the folding scheme, extra is always 1
+
         if self.stencil.is_periodic:
-            # TODO: we just consider 1 direction now
-            extra = math.ceil(F.shape[0] / 2 / M_origin.shape[0])
+            # TODO: allow M_origin to get odd number
+            M_origin = self.stencil.generate_mesh()
+            F = self.physics.generate_F(
+                self.stencil, add_diffusion=add_diffusion, fold_to_bz=fold_to_bz
+            ).array
+            # Even with bz folding, we still need 1 extra image
+            # each direction
+            if fold_to_bz:
+                # In case there is 1 pixel difference
+                extra = 1
+            else:
+                extra = math.ceil(F.shape[0] / 2 / M_origin.shape[0])
             M, recover_indices = M_origin.tiled_array(extra_x=extra)
         else:
+            F = self.physics.generate_F(
+                self.stencil,
+                add_diffusion=add_diffusion,
+            ).array
+            M_origin = self.stencil.generate_mesh()
             pad = F.shape[0] // 2
             M, recover_indices = M_origin.padded_array(pad=pad)
         return F, M, M_origin, recover_indices
 
-    def simulate_fftconvolve(self):
+    def simulate_fftconvolve(self, fold_to_bz=True):
         """Use the fftconvolve method to calculate
         the convolution between M and F.
 
@@ -525,14 +617,45 @@ class System:
         angles
         """
         F, M, M_origin, recover_indices = self._prepare_matrices(
-            add_diffusion=True
+            add_diffusion=True, fold_to_bz=fold_to_bz
         )
         results_padded = fftconvolve(M, F, mode="same")
         results = results_padded[recover_indices]
         self.results = Mesh(results, M_origin.x_range, M_origin.y_range)
         return
 
-    def simulate_raytracing(self):
+    def simulate_direct(self):
+        """Direct approach of simulating lithography pattern
+        This approach first computes the 1 beam shadow formed by
+        the stencil and indicent beam. The lithography pattern is
+        then the normalized sum of all the beam patterns.
+
+        This approach is a naive implementation for testing and benchmarking,
+        essentially the reverse operation of simulate_raytracing.
+
+        theta is defined as the azimuthal angle counted from the +y direction
+        """
+        from .utils import shape_to_projection
+
+        h, D, delta = self.stencil.h, self.stencil.D, self.stencil.delta
+        R_s = self.physics.drift
+        diffusion = self.physics.diffusion
+        theta, phi = self.physics.theta, self.physics.phi
+        # Calculate all projected patches
+        projected_patches = []
+        # If periodic, we have to create periodic images
+        if self.stencil.is_periodic:
+            patches = []
+        else:
+            patches = self.stencil.geometry.patches
+        for theta_, phi_ in zip(theta, phi):
+            for patch in patches:
+                new_patch = shape_to_projection(
+                    patch, theta_, phi_, D=D, delta=delta, Rs=R_s
+                )
+                projected_patches.append(new_patch)
+
+    def simulate_raytracing(self, fold_to_bz=True):
         """Use the ray tracing equation to calculate
         the contributions at each pixel on the substrate
 
@@ -542,9 +665,9 @@ class System:
         from scipy.ndimage import label
 
         (F, M, M_origin, recover_indices) = self._prepare_matrices(
-            add_diffusion=False
+            add_diffusion=False, fold_to_bz=fold_to_bz
         )
-        # L, _ = M.to_label()     # label matrix of M
+        M = M.astype(bool)
         L, _ = label(M)
         h, D, delta = self.stencil.h, self.stencil.D, self.stencil.delta
         R_s = self.physics.drift
@@ -581,10 +704,10 @@ class System:
             label_B = np.roll(L, f_bottom_shift, axis=(0, 1))
 
             # Apply shadowing condition (labels must match)
-            shadowing_condition = (label_T == label_B).astype(float)
+            shadowing_condition = (label_T == label_B).astype(bool)
 
             # Update the results matrix
-            results += f_value * mask_T * mask_B * shadowing_condition
+            results += f_value * (mask_T & mask_B & shadowing_condition)
 
         results_recovered = results[recover_indices]
         sigma = self.physics.diffusion / h

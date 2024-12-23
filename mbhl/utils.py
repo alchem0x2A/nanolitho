@@ -2,6 +2,9 @@ import functools
 import math
 import warnings
 
+import numpy as np
+from shapely.affinity import rotate, translate
+
 # Definition of units where um = 1
 # All dimensions are in um
 mm = 1000
@@ -58,3 +61,40 @@ def deprecated(message):
         return wrapper
 
     return decorator
+
+
+# Methods from the old_shape.py
+def translate_by_theta_phi(
+    shape, theta, phi, D, delta=0, R_s=0, consider_thickness=False
+):
+    """Translate a shape by theta
+
+    Parameters:
+    - theta: azimuthal angle. Origin at +y direction
+    - shape: shapely shape object
+    - delta: membrane thickness
+    - R_s: directional shift
+    - consider_thickness: bool, if True, offset by Rm
+    """
+    if consider_thickness:
+        H = D + delta
+    else:
+        H = D
+    Rmi = np.tan(phi) * H
+    R = Rmi + R_s
+    shift_x = np.sin(theta) * R
+    shift_y = -np.cos(theta) * R
+    new_shape = translate(shape, xoff=shift_x, yoff=shift_y)
+    return new_shape
+
+
+def shape_to_projection(shape, theta, phi, D, delta=0, R_s=0):
+    """Calculate the intersection between translated shapes"""
+    shape1 = translate_by_theta_phi(
+        shape, theta, phi, D, delta=0, R_s=0, consider_thickness=False
+    )
+    shape2 = translate_by_theta_phi(
+        shape, theta, phi, D, delta=0, R_s=0, consider_thickness=True
+    )
+    projection = shape1.intersection(shape2)
+    return projection
