@@ -561,7 +561,7 @@ class System:
         elif method == "direct":
             raise NotImplementedError()
         elif method == "raytracing":
-            self.simulate_raytracing(fold_to_bz=fold_to_bz)
+            self.simulate_raytracing(use_periodic=True)
 
         if self.results is None:
             raise RuntimeError("Simulation does not produce any results!")
@@ -571,6 +571,7 @@ class System:
 
         Parameters:
         - add_diffusion: whether to create a smeared F matrix
+        - fold_to_bz: whether to fold the F matrix to 1st BZ
 
         Returns:
         - F: offset trajectory matrix
@@ -655,7 +656,7 @@ class System:
                 )
                 projected_patches.append(new_patch)
 
-    def simulate_raytracing(self, fold_to_bz=True):
+    def simulate_raytracing(self, use_periodic=True):
         """Use the ray tracing equation to calculate
         the contributions at each pixel on the substrate
 
@@ -664,11 +665,23 @@ class System:
         """
         from scipy.ndimage import label
 
+        # For ray tracing, folding F back to 1st BZ isn't helping
         (F, M, M_origin, recover_indices) = self._prepare_matrices(
-            add_diffusion=False, fold_to_bz=fold_to_bz
+            add_diffusion=False, fold_to_bz=False
         )
-        M = M.astype(bool)
+        # We will regenerate M as 3x3 tile when stencil is periodic
         L, _ = label(M)
+        L_recover_indices = None
+        if self.stencil.is_periodic and use_periodic:
+            rows, cols = M_origin.shape
+            extra_L = int((M.shape[0] // rows - 1) / 2)
+            L_recover_indices = (
+                slice(rows * (extra_L - 1), rows * (extra_L + 2)),
+                slice(cols * (extra_L - 1), cols * (extra_L + 2)),
+            )
+            M, recover_indices = M_origin.tiled_array(extra_x=1)
+
+        M = M.astype(bool)
         h, D, delta = self.stencil.h, self.stencil.D, self.stencil.delta
         R_s = self.physics.drift
         # For the simulate_raytracing to be efficient, we
@@ -687,27 +700,31 @@ class System:
         ).astype(int)
 
         results = np.zeros_like(M, dtype=float)
-        # Index matrices
-        I_i, I_j = np.meshgrid(
-            np.arange(M.shape[0]), np.arange(M.shape[1])  # Columns  # Rows
-        )
         for (f_shift, f_bottom_shift, f_value) in zip(
             F_nz_shifts,
             F_bottom_nz_shifts,
             F[F_nz_indices[:, 0], F_nz_indices[:, 1]],
         ):
-
             # Retrieve mask and label values
             mask_T = np.roll(M, f_shift, axis=(0, 1))
             mask_B = np.roll(M, f_bottom_shift, axis=(0, 1))
+            # L matrix are much larger than M,
+            # so edge effects are eliminated
             label_T = np.roll(L, f_shift, axis=(0, 1))
             label_B = np.roll(L, f_bottom_shift, axis=(0, 1))
 
+            # print(mask_T.shape, label_T.shape)
+            if self.stencil.is_periodic and use_periodic:
+                label_T = label_T[L_recover_indices]
+                label_B = label_B[L_recover_indices]
+            # print(mask_T.shape, label_T.shape)
             # Apply shadowing condition (labels must match)
+            # TODO: make sure label_T and label_B are separated less than 1unit
             shadowing_condition = (label_T == label_B).astype(bool)
 
             # Update the results matrix
             results += f_value * (mask_T & mask_B & shadowing_condition)
+            # results += f_value * (mask_T & mask_B)
 
         results_recovered = results[recover_indices]
         sigma = self.physics.diffusion / h
