@@ -10,8 +10,14 @@ nm = 0.001
 sqrt3 = math.sqrt(3)
 sqrt2 = math.sqrt(2)
 
+unit_properties = {
+    "nm": {"name": "nanometer", "ratio": nm, "display_name": "nm"},
+    "um": {"name": "micrometer", "ratio": um, "display_name": "μm"},
+    "mm": {"name": "milimeter", "ratio": mm, "display_name": "mm"},
+}
 
-def _sanitize_rL_input(r=None, L=None, diameter=None, spacing=None):
+
+def sanitize_rL_input(r=None, L=None, diameter=None, spacing=None):
     """Sanitize the r-L or diameter-spacing inputs for Geometry"""
     if (diameter is not None and spacing is not None) and (
         r is None and L is None

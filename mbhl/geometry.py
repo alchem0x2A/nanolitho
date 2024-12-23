@@ -5,7 +5,7 @@ from shapely.geometry import Point, Polygon, box
 from shapely.ops import unary_union
 from shapely.vectorized import contains
 
-from .utils import mm, nm, sqrt2, sqrt3, um
+from .utils import mm, nm, sqrt2, sqrt3, um, unit_properties
 
 # Definition of geometries
 
@@ -139,6 +139,9 @@ class Mesh:
         repeat: repeat in x- and y-directions
                 (the array shape will be swapped)
         """
+        if isinstance(repeat, (float, int)):
+            repeat = (int(repeat), int(repeat))
+
         if not isinstance(repeat, (tuple, list)) or len(repeat) != 2:
             raise ValueError(
                 "Repeat must be a tuple or list of two integers (nx, ny)."
@@ -171,7 +174,7 @@ class Mesh:
         repeat=(1, 1),
         unit="um",
         domain=None,
-        cmap="grey",
+        cmap="gray",
         **argv,
     ):
         """Create a 2D plot of the mesh array,
@@ -191,10 +194,9 @@ class Mesh:
         - cm: 2D plot
         """
         unit = unit.lower()
-        assert unit in ("nm", "um", "mm"), "unit must be one of nm, um or mm!"
-        axis_ratio_dict = {"nm": nm, "um": um, "mm": mm}
-        axis_ratio = axis_ratio_dict[unit]
-        unit_display_name = unit if unit != "um" else "μm"
+        assert unit in unit_properties.keys(), f"unit name {unit} is unknown!"
+        axis_ratio = unit_properties[unit]["ratio"]
+        unit_display_name = unit_properties[unit]["display_name"]
         if ax is None:
             import matplotlib.pyplot as plt
 
@@ -388,7 +390,7 @@ class Geometry:
         tile_y_range = np.linspace(bounds[1], bounds[3], Ny * rep)
         mesh_x_range = np.arange(bounds[0], bounds[0] + mesh_w, hx)
         mesh_y_range = np.arange(bounds[1], bounds[1] + mesh_h, hy)
-        print(tile_x_range.shape, mesh_x_range.shape)
+
         # xmesh and ymesh are of shape (Ny, Nx)
         tile_xmesh, tile_ymesh = np.meshgrid(tile_x_range, tile_y_range)
         mask = contains(union, tile_xmesh, tile_ymesh)
@@ -469,31 +471,34 @@ class Geometry:
         repeat=(1, 1),
         divisions=256,
         cmap="gray",
+        unit="um",
         show_unit_cell=True,
+        unit_cell_color="orange",
     ):
         """
-        Visualize the geometry and unit cell in a quick way
+        Visualize the rasterized geometry quickly
 
         Parameters:
         - ax: Matplotlib axis.
         - repeat: Tuple (repeat_x, repeat_y) for replication.
+        - divisions: (nx, ny) for dividing the unit cell
+        - cmap: color map for the map
+        - show_unit_cell: whether to draw unit cell boundaries
+        - unit_cell_color: cell boundary line color
         """
 
-        if ax is None:
-            import matplotlib.pyplot as plt
-
-            fig, ax = plt.subplots()
-        # We could actually allow any repeat
-        mesh = self.generate_mesh(divisions=divisions) * repeat
+        mesh = self.generate_mesh(divisions=divisions)
         minx, miny = mesh.extent[0], mesh.extent[2]
-        ax.imshow(mesh.array, extent=mesh.extent, origin="lower", cmap=cmap)
-        ax.set_xlabel("X (um)")
-        ax.set_ylabel("Y (um)")
+        ax, cm = mesh.draw(ax, unit=unit, repeat=repeat, cmap=cmap)
+        unit_ratio = unit_properties[unit]["ratio"]
         if show_unit_cell and all(self.cell > 0):
             from matplotlib.patches import Rectangle
 
             # Calculate unit cell dimensions in μm
-            cell_width, cell_height = self.cell[0] / um, self.cell[1] / um
+            cell_width, cell_height = (
+                self.cell[0] / unit_ratio,
+                self.cell[1] / unit_ratio,
+            )
             for i in range(repeat[0]):
                 for j in range(repeat[1]):
                     x_start = i * cell_width + minx / um
@@ -502,10 +507,10 @@ class Geometry:
                         (x_start, y_start),
                         cell_width,
                         cell_height,
-                        edgecolor="red",
+                        edgecolor=unit_cell_color,
                         facecolor="none",
-                        linestyle="dotted",
+                        linestyle="--",
                         linewidth=1,
                     )
                     ax.add_patch(rect)
-        return ax
+        return ax, cm

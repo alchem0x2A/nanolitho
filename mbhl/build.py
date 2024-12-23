@@ -4,7 +4,7 @@ Geometry and trajectory patterns for simulations
 import numpy as np
 
 from .geometry import Circle, Geometry, Rectangle
-from .utils import _sanitize_rL_input, sqrt2, sqrt3
+from .utils import sanitize_rL_input, sqrt2, sqrt3
 
 
 # Collections of periodic lattices
@@ -36,7 +36,7 @@ def honeycomb_hole_lattice(
     - A periodic `Geometry` object with the honeycomb hole pattern.
     """
 
-    r, L = _sanitize_rL_input(r, L, diameter, spacing)
+    r, L = sanitize_rL_input(r, L, diameter, spacing)
     orientation = orientation.lower()
     assert orientation in (
         "vertical",
@@ -93,7 +93,7 @@ def hexagonal_hole_lattice(
 
     """
 
-    r, L = _sanitize_rL_input(r, L, diameter, spacing)
+    r, L = sanitize_rL_input(r, L, diameter, spacing)
     orientation = orientation.lower()
     assert orientation in (
         "vertical",
@@ -139,7 +139,7 @@ def square_hole_lattice(r=None, L=None, diameter=None, spacing=None):
     *  *
     *  *
     """
-    r, L = _sanitize_rL_input(r, L, diameter, spacing)
+    r, L = sanitize_rL_input(r, L, diameter, spacing)
     cell = (L, L)
 
     patches = [
@@ -166,7 +166,7 @@ def diamond_hole_lattice(r=None, L=None, diameter=None, spacing=None):
     *   *
       *
     """
-    r, L = _sanitize_rL_input(r, L, diameter, spacing)
+    r, L = sanitize_rL_input(r, L, diameter, spacing)
     cell = (L * sqrt2, L * sqrt2)
 
     patches = [
