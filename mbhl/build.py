@@ -1,6 +1,7 @@
 """A collection of functions that build common
 Geometry and trajectory patterns for simulations
 """
+
 import numpy as np
 
 from .geometry import Circle, Geometry, Rectangle
@@ -177,7 +178,11 @@ def diamond_hole_lattice(r=None, L=None, diameter=None, spacing=None):
 
 
 def line_lattice(
-    s1, s2, orientation="horizontal", length_ratio_nonperiodic=1.0
+    s1,
+    s2,
+    orientation="horizontal",
+    length_ratio_nonperiodic=1.0,
+    length_nonperiodic=None,
 ):
     """Create a line (slit) array from slit width
     s1 and edge-to-edeg spacing s2

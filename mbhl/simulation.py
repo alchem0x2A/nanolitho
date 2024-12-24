@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 from matplotlib.projections.polar import PolarAxes
 from PIL import Image
+from PIL.TiffImagePlugin import ImageFileDirectory_v2
 from scipy.ndimage import binary_dilation, gaussian_filter, label, sobel
 from scipy.signal import fftconvolve
 from scipy.stats import gaussian_kde
@@ -756,7 +757,7 @@ class System:
         ).astype(int)
 
         results = np.zeros_like(M, dtype=float)
-        for (f_shift, f_bottom_shift, f_value) in zip(
+        for f_shift, f_bottom_shift, f_value in zip(
             F_nz_shifts,
             F_bottom_nz_shifts,
             F[F_nz_indices[:, 0], F_nz_indices[:, 1]],
@@ -788,16 +789,26 @@ class System:
         self.results = Mesh(results_blurred, M_origin.x_range, M_origin.y_range)
         return
 
-    def save_tiff(self, h, fname):
-        """Save the normalized height as a tiff file so that the file can be opened by
+    def save_tiff(self, fname, repeat=(1, 1)):
+        """Save the normalized height as a tiff file
+        so that the file can be opened by
         softwares like gwyddion
         """
         if self.results is None:
             raise RuntimeError("Please finish simulation first!")
-        prob, x_range, y_rang = self.results
+        tiled_results = self.results * repeat
+        prob = tiled_results.array
         z_image = Image.fromarray(prob)
         z_image_file = Path(fname)
-        z_image.save(z_image_file)
+        # Custom tiff info
+        custtifftags = ImageFileDirectory_v2()
+        hx = tiled_results.x_range[1] - tiled_results.x_range[0]
+        hy = tiled_results.y_range[1] - tiled_results.y_range[0]
+        # spacing in um
+        custtifftags[65000] = f"XSpacing={hx}"
+        custtifftags[65001] = f"XSpacing={hy}"
+        z_image.save(z_image_file, tiffinfo=custtifftags)
+        return
 
     def draw(
         self,
