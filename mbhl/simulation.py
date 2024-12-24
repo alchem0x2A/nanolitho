@@ -37,7 +37,7 @@ class Stencil:
         geometry,
         pad=0 * nm,
         thickness=100 * nm,
-        spacing=2.5 * um,
+        gap=2.5 * um,
         h=None,
     ):
         """
@@ -46,7 +46,7 @@ class Stencil:
         """
         self.geometry = self._assign_geometry(geometry)
         self.delta = thickness
-        self.D = spacing
+        self.D = gap
         self.pad = pad
         # Domain is the min_x, max_x, min_y, max_y
         self.domain = self.geometry.bounds
@@ -319,13 +319,13 @@ class Physics:
             ("`generate_fileter` is deprecated! " "Use generate_F instead")
         )
 
-    def generate_F_fold(self, stencil, domain_ratio=1.5, add_diffusion=True):
+    def _generate_F_fold(self, stencil, domain_ratio=1.5, add_diffusion=True):
         """Generate offset trajectory F matrix that is folded back
         to the first periodic zone
 
-        This is intended for testing only.
-        Do not use this method for actual calculations,
-        as `fold_to_bz=True` in generate_F_fold is much more reliable
+        **This is intended for testing only.
+        Do not use this method for actual calculations!**
+        `fold_to_bz=True` in generate_F_fold is much more reliable
 
         This ensures that the dimension of F is the same as stencil
         """
@@ -390,8 +390,12 @@ class Physics:
         h, D, delta = stencil.h, stencil.D, stencil.delta
         phi, theta = self.phi, self.theta
         R_center = (D + delta) * np.tan(phi) + self.drift
+        # x_center, y_center = (
+        #     R_center * np.cos(theta),
+        #     R_center * np.sin(theta),
+        # )
         x_center, y_center = (
-            R_center * np.cos(theta),
+            -R_center * np.cos(theta),
             R_center * np.sin(theta),
         )
 
@@ -688,7 +692,7 @@ class System:
                 mask = contains(patch, xmesh, ymesh).astype(float)
                 results += mask
         # Normalize result
-        results = results / np.max(results)
+        results = results / (np.max(results) + 1.0e-10)
         sigma = diffusion / h
         results_blurred = gaussian_filter(results, sigma=sigma)
         self.results = Mesh(results_blurred, M_origin.x_range, M_origin.y_range)
@@ -713,6 +717,8 @@ class System:
         if self.stencil.is_periodic and use_periodic:
             rows, cols = M_origin.shape
             extra_L = int((M.shape[0] // rows - 1) / 2)
+            # L matrix is generated on a larger repetition
+            # with extra_L * 2 + 1 copies of periodic matrix
             L_recover_indices = (
                 slice(rows * (extra_L - 1), rows * (extra_L + 2)),
                 slice(cols * (extra_L - 1), cols * (extra_L + 2)),
