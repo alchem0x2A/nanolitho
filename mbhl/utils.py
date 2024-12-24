@@ -65,7 +65,14 @@ def deprecated(message):
 
 # Methods from the old_shape.py
 def translate_by_theta_phi(
-    shape, theta, phi, D, delta=0, R_s=0, consider_thickness=False
+    shape,
+    theta,
+    phi,
+    D,
+    delta=0,
+    R_s=0,
+    unit_cell=None,
+    consider_thickness=False,
 ):
     """Translate a shape by theta
 
@@ -74,6 +81,7 @@ def translate_by_theta_phi(
     - shape: shapely shape object
     - delta: membrane thickness
     - R_s: directional shift
+    - unit_cell: (cell_w, cell_h) or None
     - consider_thickness: bool, if True, offset by Rm
     """
     if consider_thickness:
@@ -84,17 +92,35 @@ def translate_by_theta_phi(
     R = Rmi + R_s
     shift_x = np.sin(theta) * R
     shift_y = -np.cos(theta) * R
+    if unit_cell is not None:
+        cw, ch = unit_cell
+        shift_x = shift_x % cw
+        shift_y = shift_y % ch
     new_shape = translate(shape, xoff=shift_x, yoff=shift_y)
     return new_shape
 
 
-def shape_to_projection(shape, theta, phi, D, delta=0, R_s=0):
+def shape_to_projection(shape, theta, phi, D, unit_cell=None, delta=0, R_s=0):
     """Calculate the intersection between translated shapes"""
     shape1 = translate_by_theta_phi(
-        shape, theta, phi, D, delta=0, R_s=0, consider_thickness=False
+        shape,
+        theta,
+        phi,
+        D,
+        delta=delta,
+        R_s=R_s,
+        unit_cell=unit_cell,
+        consider_thickness=False,
     )
     shape2 = translate_by_theta_phi(
-        shape, theta, phi, D, delta=0, R_s=0, consider_thickness=True
+        shape,
+        theta,
+        phi,
+        D,
+        delta=delta,
+        R_s=R_s,
+        unit_cell=unit_cell,
+        consider_thickness=True,
     )
     projection = shape1.intersection(shape2)
     return projection

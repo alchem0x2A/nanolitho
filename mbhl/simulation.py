@@ -554,7 +554,7 @@ class System:
 
         if method == "auto":
             # TODO: implement method choose
-            method = "fast"
+            method = "fft"
 
         if method == "fft":
             self.simulate_fftconvolve(fold_to_bz=fold_to_bz)
@@ -645,16 +645,54 @@ class System:
         # Calculate all projected patches
         projected_patches = []
         # If periodic, we have to create periodic images
+        # if self.stencil.is_periodic:
+        #     patches = []
+        # else:
+        patches = self.stencil.geometry.patches
         if self.stencil.is_periodic:
-            patches = []
+            unit_cell = self.stencil.cell
         else:
-            patches = self.stencil.geometry.patches
+            unit_cell = None
         for theta_, phi_ in zip(theta, phi):
             for patch in patches:
                 new_patch = shape_to_projection(
-                    patch, theta_, phi_, D=D, delta=delta, Rs=R_s
+                    patch,
+                    theta_,
+                    phi_,
+                    D=D,
+                    delta=delta,
+                    R_s=R_s,
+                    unit_cell=unit_cell,
                 )
                 projected_patches.append(new_patch)
+
+        combined_geometry = Geometry(
+            projected_patches, cell=unit_cell, pbc=True
+        )
+        # Combine objects on mesh
+        M_origin = self.stencil.generate_mesh()
+        results = np.zeros_like(M_origin.array).astype(float)
+        # Overlay stencil
+        if self.stencil.is_periodic:
+            M, recover_indices = M_origin.tiled_array(extra_x=1)
+            tiled_M = M_origin * (3, 3)
+            combined_geometry = combined_geometry * (3, 3)
+            xmesh, ymesh = np.meshgrid(tiled_M.x_range, tiled_M.y_range)
+            for patch in combined_geometry.patches:
+                mask = contains(patch, xmesh, ymesh).astype(float)
+                results += mask[recover_indices]
+        else:
+            M = M_origin
+            xmesh, ymesh = np.meshgrid(M.x_range, M.y_range)
+            for patch in combined_geometry.patches:
+                mask = contains(patch, xmesh, ymesh).astype(float)
+                results += mask
+        # Normalize result
+        results = results / np.max(results)
+        sigma = diffusion / h
+        results_blurred = gaussian_filter(results, sigma=sigma)
+        self.results = Mesh(results_blurred, M_origin.x_range, M_origin.y_range)
+        return
 
     def simulate_raytracing(self, use_periodic=True):
         """Use the ray tracing equation to calculate
