@@ -238,6 +238,7 @@ class Stencil:
         dimension_ratio=None,
         color="white",
         lw=1,
+        ls="-",
         alpha=1.0,
     ):
         """Plot the patch boundaries in the stencil using Shapely
@@ -248,6 +249,12 @@ class Stencil:
         - color: line color of the patch
         """
         ax = ensure_ax(ax)
+        if ax is not None:
+            original_xlim = ax.get_xlim()
+            original_ylim = ax.get_ylim()
+        else:
+            original_xlim, original_ylim = None, None
+
         new_geometry = self.geometry * repeat
         if dimension_ratio is None:
             unit_ratio = unit_properties[unit]["ratio"]
@@ -263,11 +270,16 @@ class Stencil:
             ax.plot(
                 xy[0],
                 xy[1],
-                "--",
+                ls,
                 color=color,
                 alpha=alpha,
                 linewidth=lw,
             )
+        if original_xlim is not None:
+            ax.set_xlim(*original_xlim)
+        if original_ylim is not None:
+            ax.set_ylim(*original_ylim)
+
         return ax
 
 
@@ -794,8 +806,10 @@ class System:
         unit="um",
         repeat=(1, 1),
         show_mask=True,
-        mask_lw=1.5,
+        mask_lw=1.0,
         mask_alpha=0.5,
+        mask_color="white",
+        mask_ls="-",
         dimension_ratio=None,
         domain=None,
         alpha=1.0,
@@ -825,6 +839,7 @@ class System:
                 dimension_ratio=dimension_ratio,
                 unit=unit,
                 lw=mask_lw,
+                color=mask_color,
                 alpha=mask_alpha,
             )
         return
