@@ -823,14 +823,31 @@ class System:
         mask_ls="-",
         dimension_ratio=None,
         domain=None,
+        fill_to_domain=True,
         alpha=1.0,
         vmax=None,
     ):
-        """Draw the system simulation results as 2D map"""
+        """Draw the system simulation results as 2D map
+        fill_to_domain:
+        calculate the repeat so that it is larger than domain
+        """
         # TODO: make sure lazy evaluation of the results
         if self.results is None:
             raise RuntimeError("Please finish simulation first!")
 
+        if fill_to_domain:
+            if not self.stencil.is_periodic:
+                warnings.warn(
+                    "fill_to_domain has no effect on non-periodic stencil!"
+                )
+            elif domain is not None:
+                xmax, ymax = domain[1], domain[3]
+                cw, ch = self.stencil.cell
+                repeat_x, repeat_y = (
+                    int(np.ceil(xmax / cw)),
+                    int(np.ceil(ymax / ch)),
+                )
+                repeat = (repeat_x, repeat_y)
         ax, cm = self.results.draw(
             ax=ax,
             repeat=repeat,
