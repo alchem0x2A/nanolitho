@@ -576,7 +576,7 @@ class System:
         if method == "fft":
             self.simulate_fftconvolve(fold_to_bz=fold_to_bz)
         elif method == "direct":
-            raise NotImplementedError()
+            self.simulate_direct()
         elif method == "raytracing":
             self.simulate_raytracing(use_periodic=True)
 
@@ -870,4 +870,5 @@ class System:
                 color=mask_color,
                 alpha=mask_alpha,
             )
-        return
+
+        return ax, cm
