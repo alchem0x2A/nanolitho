@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 from scipy.ndimage import label
 from shapely.affinity import translate
@@ -167,6 +169,67 @@ class Mesh:
 
         tiled_array = np.tile(self.array, (ny, nx))
         return Mesh(tiled_array, new_x_range, new_y_range)
+
+    def save(
+        self, filepath: str, compressed: bool = True, overwrite: bool = False
+    ) -> None:
+        """
+        Save this Mesh to a .npz file.
+
+        Parameters
+        ----------
+        filepath : str
+            Path to the output .npz file.
+        compressed : bool, default=True
+            If True, use np.savez_compressed (smaller files),
+            otherwise use np.savez (faster, bigger files).
+        """
+        filepath = Path(filepath)
+        if filepath.is_file() and (overwrite is not True):
+            raise RuntimeError(
+                (
+                    f"File {filepath.as_posix()} exists! "
+                    "Please set `overwrite=True` if you want to overwrite."
+                )
+            )
+        if compressed:
+            np.savez_compressed(
+                filepath,
+                array=self.array,
+                x_range=self.x_range,
+                y_range=self.y_range,
+            )
+        else:
+            np.savez(
+                filepath,
+                array=self.array,
+                x_range=self.x_range,
+                y_range=self.y_range,
+            )
+
+    @classmethod
+    def load(cls, filepath: str) -> "Mesh":
+        """
+        Load a Mesh from a .npz file previously saved by .save(...).
+
+        Parameters
+        ----------
+        filepath : str
+            Path to the input .npz file.
+
+        Returns
+        -------
+        mesh : Mesh
+            A new Mesh instance with array, x_range, y_range.
+        """
+        filepath = Path(filepath)
+        data = np.load(filepath)
+        array = data["array"]
+        x_range = data["x_range"]
+        y_range = data["y_range"]
+
+        # Create a new instance
+        return cls(array, x_range, y_range)
 
     def draw(
         self,
