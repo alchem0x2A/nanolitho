@@ -7,7 +7,7 @@
    viewBox="0 0 48.083561 50.956993"
    version="1.1"
    id="svg21423"
-   inkscape:version="1.2.2 (b0a84865, 2022-12-01)"
+   inkscape:version="1.1.1 (c3084ef, 2021-09-22)"
    sodipodi:docname="SI-critical-phi.svg"
    inkscape:export-filename="./SI-critical-phi.png"
    inkscape:export-xdpi="300"
@@ -29,14 +29,15 @@
      inkscape:document-units="mm"
      showgrid="false"
      inkscape:zoom="2.6738553"
-     inkscape:cx="87.140092"
-     inkscape:cy="102.09976"
+     inkscape:cx="74.237376"
+     inkscape:cy="95.367913"
      inkscape:window-width="1440"
      inkscape:window-height="872"
      inkscape:window-x="223"
      inkscape:window-y="1080"
      inkscape:window-maximized="0"
-     inkscape:current-layer="layer1" />
+     inkscape:current-layer="layer1"
+     inkscape:pageshadow="2" />
   <defs
      id="defs21420">
     <radialGradient
@@ -301,7 +302,7 @@
              style="font-weight:bold"
              id="tspan6880-9">x</tspan><tspan
              style="font-size:65%;baseline-shift:sub"
-             id="tspan6864-9">m</tspan></tspan></text>
+             id="tspan6864-9" /></tspan></text>
       <text
          xml:space="preserve"
          style="font-size:3.52778px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;stroke-width:0.264583"
@@ -355,7 +356,7 @@
              style="font-weight:bold"
              id="tspan7066-3">x</tspan><tspan
              style="font-size:65%;baseline-shift:sub"
-             id="tspan7068-0">m</tspan></tspan></text>
+             id="tspan7068-0" /></tspan></text>
       <text
          xml:space="preserve"
          style="font-size:3.52778px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;stroke-width:0.264583"

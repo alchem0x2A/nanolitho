@@ -7,7 +7,7 @@
    viewBox="0 0 100.60088 105.07218"
    version="1.1"
    id="svg5"
-   inkscape:version="1.2.2 (b0a84865, 2022-12-01)"
+   inkscape:version="1.1.1 (c3084ef, 2021-09-22)"
    sodipodi:docname="SI-full-geometry.svg"
    inkscape:export-filename="SI-full-geometry.png"
    inkscape:export-xdpi="300"
@@ -29,15 +29,16 @@
      inkscape:document-units="mm"
      showgrid="false"
      showguides="true"
-     inkscape:zoom="0.95731459"
-     inkscape:cx="65.809088"
-     inkscape:cy="282.03895"
+     inkscape:zoom="2.898862"
+     inkscape:cx="128.4987"
+     inkscape:cy="139.71"
      inkscape:window-width="1680"
      inkscape:window-height="1022"
      inkscape:window-x="0"
      inkscape:window-y="0"
      inkscape:window-maximized="0"
-     inkscape:current-layer="layer1">
+     inkscape:current-layer="layer1"
+     inkscape:pageshadow="2">
     <sodipodi:guide
        position="77.748186,48.303729"
        orientation="0,-1"
@@ -424,14 +425,14 @@
     <text
        xml:space="preserve"
        style="font-size:3.52778px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;fill:#000000;fill-opacity:1;stroke-width:0.264583"
-       x="100.86086"
-       y="36.80555"
+       x="97.1567"
+       y="27.809719"
        id="text6888"><tspan
          sodipodi:role="line"
          id="tspan6886"
          style="font-weight:bold;font-size:3.52778px;fill:#000000;fill-opacity:1;stroke-width:0.264583"
-         x="100.86086"
-         y="36.80555">Ω</tspan></text>
+         x="97.1567"
+         y="27.809719">Ω</tspan></text>
     <g
        id="g3977"
        transform="matrix(0,1,1,0,73.682881,-74.605897)">
@@ -852,7 +853,7 @@
              style="font-weight:bold"
              id="tspan6880">x</tspan><tspan
              style="font-size:65%;baseline-shift:sub"
-             id="tspan6864">m</tspan></tspan></text>
+             id="tspan6864" /></tspan></text>
       <text
          xml:space="preserve"
          style="font-size:3.52778px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;stroke-width:0.264583"
@@ -901,7 +902,7 @@
              style="font-weight:bold"
              id="tspan7066">x</tspan><tspan
              style="font-size:65%;baseline-shift:sub"
-             id="tspan7068">m</tspan></tspan></text>
+             id="tspan7068" /></tspan></text>
       <text
          xml:space="preserve"
          style="font-size:3.52778px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;stroke-width:0.264583"
