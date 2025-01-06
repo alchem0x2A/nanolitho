@@ -1,13 +1,24 @@
+from copy import copy, deepcopy
 from pathlib import Path
 
 import numpy as np
+from numpy.fft import fft2, fftfreq, fftshift, ifft2
 from scipy.ndimage import label
 from shapely.affinity import translate
 from shapely.geometry import Point, Polygon, box
 from shapely.ops import unary_union
 from shapely.vectorized import contains
 
-from .utils import ensure_ax, mm, nm, sqrt2, sqrt3, um, unit_properties
+from .utils import (
+    ensure_ax,
+    mm,
+    next_power_of_two,
+    nm,
+    sqrt2,
+    sqrt3,
+    um,
+    unit_properties,
+)
 
 # Definition of geometries
 
@@ -44,16 +55,55 @@ class Mesh:
     - y_range: (y_min, y_max) of the mesh
     """
 
-    def __init__(self, array, x_range, y_range):
+    def __init__(
+        self,
+        array,
+        x_range,
+        y_range,
+        is_fourier=False,
+        unit="um",
+        crop_indices=None,
+    ):
         self.array = array
         if len(self.array.shape) != 2:
             raise ValueError("Array must be 2D!")
         self.x_range = x_range
         self.y_range = y_range
+        # Use trim_indices to get the centered array
+        self.crop_indices = crop_indices
+        self.is_fourier = is_fourier
+        self.unit = unit
 
     @property
     def shape(self):
         return self.array.shape
+
+    def __copy__(self):
+        """Copy instance"""
+        return deepcopy(self)
+
+    @property
+    def cropped_mesh(self):
+        """Construct a cropped mesh from crop_indices"""
+        if self._crop_indices is None:
+            return self
+        else:
+            sy, sx = self.crop_indices
+            cropped_array = self.array[sy, sx]
+            cropped_x_range = self.x_range[sx]
+            cropped_y_range = self.y_range[sy]
+            # TODO: Should we remember the original
+            cropped_x_range = cropped_x_range - cropped_x_range[0]
+            cropped_y_range = cropped_y_range - cropped_y_range[0]
+
+            return Mesh(
+                array=cropped_array,
+                x_range=cropped_x_range,
+                y_range=cropped_y_range,
+                is_fourier=self.is_fourier,
+                crop_indices=None,
+                unit=self.unit,
+            )
 
     @property
     def extent(self):
@@ -207,6 +257,7 @@ class Mesh:
                 y_range=self.y_range,
             )
 
+    # def fft(self, )
     @classmethod
     def load(cls, filepath: str) -> "Mesh":
         """
@@ -230,6 +281,89 @@ class Mesh:
 
         # Create a new instance
         return cls(array, x_range, y_range)
+
+    def calculate_fft(self, pad_to_size=None):
+        """Return a FFT mesh from the current (real-space) mesh
+        if self.is_fourier is False
+
+        Parameters:
+        pad_to_size: if None, use the closest 2^n size
+                     otherwise the closet 2^n size to pad_to_size
+                     pad_to_size can be useful such as
+                     the dimension from a larger matrix and align
+        """
+        if self.is_fourier:
+            raise ValueError(
+                "Cannot run fft since Current mesh is already in Fourier space!"
+            )
+        # TODO: make the fft pad to 2^n
+        if pad_to_size is not None:
+            fft_size = next_power_of_two(pad_to_size)
+        else:
+            fft_size = next_power_of_two(
+                max(len(self.x_range), len(self.y_range))
+            )
+        print(fft_size)
+
+        padded_array = np.zeros((fft_size, fft_size), dtype=np.float32)
+        nx, ny = len(self.x_range), len(self.y_range)
+        # TODO: should we make half padding?
+        padded_array[:ny, :nx] = self.array
+        fft_array = fftshift(fft2(padded_array))
+        n_samples = fft_size
+        sample_spacing = self.x_range[1] - self.x_range[0]
+        # Use radian frequencies. The fft frequency is always in radians / um
+        fft_freq = fftshift(fftfreq(n_samples, sample_spacing)) * np.pi * 2
+        return Mesh(
+            array=fft_array, x_range=fft_freq, y_range=fft_freq, is_fourier=True
+        )
+
+    def auto_contrast_fft(self, pmin=99.0, pmax=99.9):
+        """Generate an auto-contrasted array for FFT display"""
+        if not self.is_fourier:
+            raise NotImplementedError("Only works on FFT grid!")
+        array_draw = np.log1p(np.abs(self.array))
+        lo = np.percentile(array_draw, pmin)
+        hi = np.percentile(array_draw, pmax)
+        return np.clip((array_draw - lo) / (hi - lo + 1e-9), 0, 1)
+
+    def draw_fft(
+        self,
+        ax=None,
+        unit="rad/um",
+        dimension_ratio=None,
+        domain=None,
+        cmap="gray",
+        display_window=(100 - 1.0e-1, 100 - 1.0e-3),
+        **argv,
+    ):
+        """Draw the 2D mesh in Fourier space.
+        Requires self.is_fourier=True
+        """
+        if not self.is_fourier:
+            raise NotImplementedError(
+                "Must be a Fourier-space mesh to use draw_fft!"
+            )
+        ax = ensure_ax(ax)
+
+        # TODO: implement unit
+
+        # TODO: implement B/W balancing
+        if display_window is None:
+            array_draw = np.log1p(np.abs(self.array))
+        else:
+            array_draw = self.auto_contrast_fft(*display_window)
+        cm = ax.imshow(
+            array_draw, extent=self.extent, origin="lower", cmap=cmap, **argv
+        )
+        # TODO: assert if domain is not symmetric
+        if domain:
+            xy_lims = np.array(domain)
+            ax.set_xlim(xy_lims[0], xy_lims[1])
+            ax.set_ylim(xy_lims[2], xy_lims[3])
+        ax.set_xlabel(f"$f_x$ ({unit})")
+        ax.set_ylabel(f"$f_y$ ({unit})")
+        return ax, cm
 
     def draw(
         self,
@@ -258,6 +392,13 @@ class Mesh:
         - ax: Axes with plot
         - cm: 2D plot
         """
+        if self.is_fourier:
+            raise NotImplementedError(
+                (
+                    "You have a mesh in Fourier space. "
+                    "Please use the draw_fourier method instead"
+                )
+            )
         ax = ensure_ax(ax)
         if dimension_ratio is None:
             unit = unit.lower()

@@ -20,6 +20,15 @@ unit_properties = {
 }
 
 
+def next_power_of_two(n):
+    """Return the smallest power of two >= n.
+    Example
+    next_power_of_two(60) = 64
+    next_power_of_two(64) = 64
+    """
+    return 1 << (n - 1).bit_length()
+
+
 def ensure_ax(ax=None, subplot_kw={}):
     """Ensure one Axes object exists"""
     if ax is None:
