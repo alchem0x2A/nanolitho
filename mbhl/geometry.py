@@ -75,12 +75,41 @@ class Mesh:
         self.unit = unit
 
     @property
+    def hx(self):
+        return self.x_range[1] - self.x_range[0]
+
+    @property
+    def hy(self):
+        return self.y_range[1] - self.y_range[0]
+
+    @property
+    def Nx(self):
+        return len(self.x_range)
+
+    @property
+    def Ny(self):
+        return len(self.y_range)
+
+    @property
     def shape(self):
         return self.array.shape
 
     def __copy__(self):
         """Copy instance"""
         return deepcopy(self)
+
+    @classmethod
+    def from_analytical_function(
+        cls, f, x_range, y_range, func_args=(), **kwargs
+    ):
+        """Create the mesh object from given x_range and y_range
+        using an analytical function f(x, y, *func_args)
+        func_args: tuple of arguments for function f
+        kwargs: mapping arguments for the Mesh object
+        """
+        xmesh, ymesh = np.meshgrid(x_range, y_range)
+        array = f(xmesh, ymesh, *func_args)
+        return Mesh(array, x_range, y_range, **kwargs)
 
     @property
     def cropped_mesh(self):
@@ -107,7 +136,11 @@ class Mesh:
 
     @property
     def extent(self):
-        """Combine range to extent for matplotlib's imshow"""
+        """Combine range to extent for matplotlib's imshow
+
+        If you want to use crop indices, generate self.cropped_mesh
+        first before plotting
+        """
         return np.array(
             [
                 self.x_range[0],
@@ -131,6 +164,37 @@ class Mesh:
         labeled_array, num_features = label(self.array)
         return Mesh(labeled_array, self.x_range, self.y_range), num_features
 
+    # TODO: this method will break old API
+    def tiled_mesh(self, extra_x=1, extra_y=None):
+        """
+        Tile the array by (2 * extra_x + 1, 2 * extra_y + 1) times
+        in x- and y-directions, and return the tiled array with
+        indices to trim back.
+
+        Parameters:
+        - extra_x: Number of extra tiles to add in the x-direction on each side.
+        - extra_y: Number of extra tiles to add in the y-direction on each side. If None, extra_y = extra_x.
+
+        Returns:
+        - tiled_array: A periodically tiled array.
+        - trim_indices: Slice indices to recover the original
+                        array from the tiled version.
+        """
+        if extra_y is None:
+            extra_y = extra_x
+
+        # tiled_array = np.tile(self.array, (2 * extra_y + 1, 2 * extra_x + 1))
+        # new_x_range
+        tiled_mesh = self * (2 * extra_y + 1, 2 * extra_x + 1)
+        rows, cols = tiled_mesh.array.shape
+        trim_indices = (
+            slice(rows * extra_y, rows * (extra_y + 1)),
+            slice(cols * extra_x, cols * (extra_x + 1)),
+        )
+        tiled_mesh.crop_indices = trim_indices
+        return tiled_mesh
+
+    # TODO: notify user that tiled_array only returns the array!
     def tiled_array(self, extra_x=1, extra_y=None):
         """
         Tile the array by (2 * extra_x + 1, 2 * extra_y + 1) times
@@ -218,7 +282,16 @@ class Mesh:
         # Tiled mask have shape ny X nx
 
         tiled_array = np.tile(self.array, (ny, nx))
-        return Mesh(tiled_array, new_x_range, new_y_range)
+
+        # TODO: Unset the crop indices since they won't be correct
+        return Mesh(
+            tiled_array,
+            new_x_range,
+            new_y_range,
+            unit=self.unit,
+            is_fourier=self.is_fourier,
+            crop_indices=None,
+        )
 
     def save(
         self, filepath: str, compressed: bool = True, overwrite: bool = False
@@ -357,7 +430,7 @@ class Mesh:
             array_draw, extent=self.extent, origin="lower", cmap=cmap, **argv
         )
         # TODO: assert if domain is not symmetric
-        if domain:
+        if domain is not None:
             xy_lims = np.array(domain)
             ax.set_xlim(xy_lims[0], xy_lims[1])
             ax.set_ylim(xy_lims[2], xy_lims[3])
@@ -419,7 +492,7 @@ class Mesh:
             cmap=cmap,
             **argv,
         )
-        if domain:
+        if domain is not None:
             xy_lims = np.array(domain) / axis_ratio
             ax.set_xlim(xy_lims[0], xy_lims[1])
             ax.set_ylim(xy_lims[2], xy_lims[3])
