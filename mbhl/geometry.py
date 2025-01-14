@@ -107,6 +107,10 @@ class Mesh:
         func_args: tuple of arguments for function f
         kwargs: mapping arguments for the Mesh object
         """
+        if (len(x_range.shape) != 1) or (len(y_range.shape) != 1):
+            raise ValueError(
+                "x_range or y_range must be 1d input of same length!"
+            )
         xmesh, ymesh = np.meshgrid(x_range, y_range)
         array = f(xmesh, ymesh, *func_args)
         return Mesh(array, x_range, y_range, **kwargs)
@@ -386,7 +390,8 @@ class Mesh:
         n_samples = fft_size
         sample_spacing = self.x_range[1] - self.x_range[0]
         # Use radian frequencies. The fft frequency is always in radians / um
-        fft_freq = fftshift(fftfreq(n_samples, sample_spacing)) * np.pi * 2
+        # fft_freq = fftshift(fftfreq(n_samples, sample_spacing)) * np.pi * 2
+        fft_freq = fftshift(fftfreq(n_samples, sample_spacing))
         return Mesh(
             array=fft_array, x_range=fft_freq, y_range=fft_freq, is_fourier=True
         )
