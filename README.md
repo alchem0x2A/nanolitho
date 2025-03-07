@@ -1,4 +1,5 @@
 # Computational Package for Molecular-Beam Holographic Lithography (MBHL)
+[![DOI](https://zenodo.org/badge/652728964.svg)](https://doi.org/10.5281/zenodo.14986964)
 
 ## Installation
 The codes require `Python3`, `shapely`, `ase` to run. For post-processing of 3D models,
