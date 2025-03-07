@@ -30,14 +30,14 @@
      inkscape:document-units="pt"
      showgrid="false"
      inkscape:zoom="1.1366426"
-     inkscape:cx="345.75511"
-     inkscape:cy="251.17833"
+     inkscape:cx="208.50881"
+     inkscape:cy="136.80642"
      inkscape:window-width="1666"
      inkscape:window-height="891"
      inkscape:window-x="0"
      inkscape:window-y="0"
      inkscape:window-maximized="0"
-     inkscape:current-layer="axes_1"
+     inkscape:current-layer="figure_1"
      showguides="true" />
   <metadata
      id="metadata19131">
@@ -1785,8 +1785,8 @@
            style="stroke-width:0.75"
            x="70.056992"
            y="61.709332"><tspan
-   style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-family:'Andale Mono';-inkscape-font-specification:'Andale Mono'"
-   id="tspan24287">direct</tspan></tspan><tspan
+             style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-family:'Andale Mono';-inkscape-font-specification:'Andale Mono'"
+             id="tspan24287">direct</tspan></tspan><tspan
            sodipodi:role="line"
            style="stroke-width:0.75"
            x="70.056992"
@@ -2528,7 +2528,9 @@
              x="221.4"
              y="14.414688"
              id="text20112"
-             transform="rotate(-0 221.4 14.414688)">Mesh spacing h (nm)</text>
+             transform="rotate(-0 221.4 14.414688)">Mesh spacing <tspan
+   style="font-style:italic"
+   id="tspan26959">h</tspan> (nm)</text>
         </g>
       </g>
       <g

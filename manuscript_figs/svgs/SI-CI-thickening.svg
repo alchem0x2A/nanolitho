@@ -28,13 +28,13 @@
      inkscape:deskcolor="#d1d1d1"
      inkscape:document-units="mm"
      showgrid="false"
-     inkscape:zoom="1.0332002"
-     inkscape:cx="210.99493"
-     inkscape:cy="160.18193"
+     inkscape:zoom="1.1323959"
+     inkscape:cx="177.9413"
+     inkscape:cy="168.22739"
      inkscape:window-width="1610"
      inkscape:window-height="961"
-     inkscape:window-x="222"
-     inkscape:window-y="930"
+     inkscape:window-x="70"
+     inkscape:window-y="33"
      inkscape:window-maximized="0"
      inkscape:current-layer="layer1" /><defs
      id="defs2"><marker
@@ -988,15 +988,15 @@
            id="path2879" /></g></g><text
        xml:space="preserve"
        style="font-size:4.00415px;line-height:1.25;font-family:'fira sans';-inkscape-font-specification:'fira sans';stroke-width:0.300312;stroke-linecap:butt;stroke-linejoin:round"
-       x="-93.911049"
+       x="-88.823471"
        y="147.65237"
        id="text9769"
        transform="rotate(-90)"><tspan
          sodipodi:role="line"
          id="tspan9767"
          style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-family:arial;-inkscape-font-specification:arial;stroke-width:0.300312"
-         x="-93.911049"
-         y="147.65237">CL Normalized Intensity [-]</tspan></text><image
+         x="-88.823471"
+         y="147.65237">Norm. CL probability</tspan></text><image
        width="4.6990976"
        height="32.82663"
        preserveAspectRatio="none"
@@ -1153,6 +1153,6 @@
          x="100.93289"
          y="72.747978">Δ<tspan
    style="font-style:italic"
-   id="tspan8027">δ</tspan> = 50 nm, <tspan
+   id="tspan8027">δ</tspan> = 100 nm, <tspan
    style="font-style:italic"
    id="tspan8029">ε</tspan> = 0.13</tspan></text></g></svg>
