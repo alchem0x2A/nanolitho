@@ -1,7 +1,7 @@
 # Computational Package for Molecular-Beam Holographic Lithography (MBHL)
 
 ## Installation
-The codes require `Python3`, `shapely`, `ase` to run. For post-processing of 3D models, 
+The codes require `Python3`, `shapely`, `ase` to run. For post-processing of 3D models,
 `Blender` and `Gwyddion` are required.
 
 We recommend using `miniconda` to initialize a working environment:
@@ -22,7 +22,3 @@ cd nanolitho
 jupyter lab &
 ```
 To continue, open the corresponding notebooks in the jupyter browser window and run the experiments.
-
-## Tutorial
-An interactive tutorial for the MBHL package can be found at (https://mybinder.org/v2/gh/alchem0x2A/mbhl-public-demo/main). 
-The source codes are in (https://github.com/alchem0x2A/mbhl-public-demo).
